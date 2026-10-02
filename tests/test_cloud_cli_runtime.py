@@ -286,7 +286,10 @@ def test_source_prompt_shows_paths_and_literal_confirmation(
 ) -> None:
     (tmp_path / "app.py").write_text("print('ok')\n", encoding="utf-8")
     dangerous_name = "visible\x1b]52;c;copied\x07\x1b[2J.py"
-    (tmp_path / dangerous_name).write_text("print('safe')\n", encoding="utf-8")
+    try:
+        (tmp_path / dangerous_name).write_text("print('safe')\n", encoding="utf-8")
+    except OSError:
+        pytest.skip("Filesystem does not support control characters in filenames")
     output = io.StringIO()
     console = Console(file=output, width=100)
     prompts: list[tuple[str, bool]] = []

@@ -8,6 +8,7 @@ import os
 import shutil
 import stat
 import subprocess  # nosec B404
+import sys
 import tempfile
 import zipfile
 from collections import Counter
@@ -603,7 +604,7 @@ def _write_archive(destination: Path, files: tuple[SelectedFile, ...]) -> None:
                     or current.st_dev != item.device
                     or current.st_ino != item.inode
                     or current.st_mtime_ns != item.mtime_ns
-                    or current.st_ctime_ns != item.ctime_ns
+                    or (sys.platform != "win32" and current.st_ctime_ns != item.ctime_ns)
                 ):
                     raise http.CloudError(
                         f"{item.archive_name} changed while the source archive was being built; "
@@ -631,7 +632,7 @@ def _write_archive(destination: Path, files: tuple[SelectedFile, ...]) -> None:
                         or final.st_dev != item.device
                         or final.st_ino != item.inode
                         or final.st_mtime_ns != item.mtime_ns
-                        or final.st_ctime_ns != item.ctime_ns
+                        or (sys.platform != "win32" and final.st_ctime_ns != item.ctime_ns)
                     ):
                         raise http.CloudError(
                             f"{item.archive_name} changed while the source archive was being "
