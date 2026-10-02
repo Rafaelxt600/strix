@@ -50,11 +50,28 @@ async def _docker_backend(
     return client, session
 
 
+async def _emulated_backend(
+    *,
+    image: str,
+    manifest: Manifest,
+    exposed_ports: tuple[int, ...],
+    bind_mounts: list[dict[str, Any]] | None = None,
+) -> tuple[Any, Any]:
+    del image, exposed_ports
+    from strix.runtime.emulated import EmulatedSandboxClient
+
+    client = EmulatedSandboxClient()
+    session = await client.create(manifest=manifest, bind_mounts=bind_mounts)
+    await session.start()
+    return client, session
+
+
 _BACKENDS: dict[str, SandboxBackend] = {
     "docker": _docker_backend,
+    "emulated": _emulated_backend,
 }
 
-_BIND_MOUNT_BACKENDS: set[str] = {"docker"}
+_BIND_MOUNT_BACKENDS: set[str] = {"docker", "emulated"}
 
 
 def get_backend(name: str) -> SandboxBackend:

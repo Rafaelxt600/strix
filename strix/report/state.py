@@ -232,6 +232,9 @@ class ReportState:
             "targets_info": [],
             "llm_usage": self._build_llm_usage_record(),
         }
+        if load_settings().runtime.backend == "emulated":
+            self.run_record["execution_mode"] = "emulated"
+            self.run_record["runtime"] = "EmulatedSandbox"
         self._run_dir: Path | None = None
         self._saved_vuln_ids: set[str] = set()
 
@@ -368,6 +371,15 @@ class ReportState:
             "severity": severity.lower().strip(),
             "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
         }
+
+        if (
+            load_settings().runtime.backend == "emulated"
+            or (self.scan_config and self.scan_config.get("dry_run"))
+            or self.run_record.get("execution_mode") == "emulated"
+        ):
+            report["execution_mode"] = "emulated"
+            report["source"] = "fixture"
+            report["runtime"] = "EmulatedSandbox"
 
         if description:
             report["description"] = description.strip()

@@ -551,10 +551,17 @@ def _result_properties(
         "confidence_rationale",
         "severity_change_conditions",
         "fix_verification",
+        "execution_mode",
+        "source",
+        "runtime",
     ):
         value = report.get(key)
         if value not in (None, ""):
             strix[key] = value
+
+    if report.get("execution_mode") == "emulated":
+        properties["execution_mode"] = "emulated"
+        properties["runtime"] = report.get("runtime", "EmulatedSandbox")
 
     dependency_metadata = report.get("dependency_metadata")
     if isinstance(dependency_metadata, dict) and dependency_metadata:

@@ -51,7 +51,7 @@ def _positive_int(value: str) -> int:
     return parsed
 
 
-def parse_arguments() -> argparse.Namespace:
+def parse_arguments(cli_args: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Strix Multi-Agent Cybersecurity Penetration Testing Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -187,6 +187,15 @@ Strix Cloud:
     )
 
     parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Run in simulated mode using an EmulatedSandbox without Docker. "
+            "Simulates tool execution and validates the full pipeline safely."
+        ),
+    )
+
+    parser.add_argument(
         "-m",
         "--scan-mode",
         type=str,
@@ -289,7 +298,7 @@ Strix Cloud:
         ),
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(cli_args)
     # Startup-resolved state lives alongside the parsed flags. The full schema
     # is established here so downstream code reads attributes directly.
     args.needs_setup = False
@@ -297,6 +306,9 @@ Strix Cloud:
     args.local_sources = []
     args.diff_scope = {"active": False}
     args.run_name = None
+
+    if getattr(args, "dry_run", False):
+        os.environ["STRIX_RUNTIME_BACKEND"] = "emulated"
 
     if args.config:
         apply_config_override(validate_config_file(args.config))

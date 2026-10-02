@@ -441,8 +441,10 @@ def main() -> None:
             restart_after_update()
         sys.exit(0)
 
-    check_docker_installed()
-    pull_docker_image()
+    is_emulated = getattr(args, "dry_run", False) or load_settings().runtime.backend == "emulated"
+    if not is_emulated:
+        check_docker_installed()
+        pull_docker_image()
     validate_environment()
 
     # Everything below imports the scan engine; do not race the warm-up thread.

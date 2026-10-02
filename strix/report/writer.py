@@ -138,8 +138,19 @@ def write_run_record(run_dir: Path, run_record: dict[str, Any]) -> None:
 
 def write_executive_report(run_dir: Path, final_scan_result: str) -> None:
     path = run_dir / "penetration_test_report.md"
+    run_rec = read_run_record(run_dir)
+    is_emulated = run_rec.get("execution_mode") == "emulated"
+
     with path.open("w", encoding="utf-8") as f:
         f.write("# Security Penetration Test Report\n\n")
+        if is_emulated:
+            f.write(
+                "> [!WARNING]\n"
+                "> **SIMULATED SCAN REPORT (EMULATED SANDBOX / DRY RUN)**\n"
+                "> This assessment was executed in emulated mode without real offensive tools\n"
+                "> or live target exploitation.\n"
+                "> All findings are deterministic fixtures generated for pipeline verification.\n\n"
+            )
         f.write(f"**Generated:** {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n")
         f.write(f"{final_scan_result}\n")
     logger.info("Saved final penetration test report to: %s", path)
@@ -221,12 +232,25 @@ def atomic_write_text(path: Path, payload: str) -> None:
 
 
 def render_vulnerability_md(report: dict[str, Any]) -> str:  # noqa: PLR0912, PLR0915
+    is_emulated = report.get("execution_mode") == "emulated"
+
     lines: list[str] = [
         f"# {report.get('title', 'Untitled Vulnerability')}\n",
+    ]
+    if is_emulated:
+        lines.extend([
+            "> [!WARNING]",
+            "> **SIMULATED FINDING (EMULATED SANDBOX / DRY RUN)**",
+            "> This finding was generated under an emulated sandbox environment for testing",
+            "> or pipeline validation.",
+            "> No actual offensive exploitation against target systems was conducted.\n",
+        ])
+
+    lines.extend([
         f"**ID:** {report.get('id', 'unknown')}",
         f"**Severity:** {report.get('severity', 'unknown').upper()}",
         f"**Found:** {report.get('timestamp', 'unknown')}",
-    ]
+    ])
 
     dep_meta = report.get("dependency_metadata") or {}
     metadata: list[tuple[str, Any]] = [
@@ -242,6 +266,9 @@ def render_vulnerability_md(report: dict[str, Any]) -> str:  # noqa: PLR0912, PL
         ("CVE", report.get("cve")),
         ("CWE", report.get("cwe")),
     ]
+    if is_emulated:
+        metadata.append(("Execution Mode", "EMULATED (Simulated Fixture)"))
+        metadata.append(("Runtime", report.get("runtime", "EmulatedSandbox")))
     cvss = report.get("cvss")
     if cvss is not None:
         metadata.append(("CVSS", cvss))
