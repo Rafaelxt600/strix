@@ -111,19 +111,28 @@ def _refresh_guard() -> Iterator[None]:
         try:
             import fcntl
 
+            flock = getattr(fcntl, "flock", None)
+            lock_ex = getattr(fcntl, "LOCK_EX", None)
+            lock_un = getattr(fcntl, "LOCK_UN", None)
             lock_path = AUTH_PATH.with_suffix(".lock")
             lock_path.parent.mkdir(parents=True, exist_ok=True)
             handle = lock_path.open("w")
         except (ImportError, OSError):
             yield
             return
+        if flock is None or lock_ex is None or lock_un is None:
+            try:
+                yield
+            finally:
+                handle.close()
+            return
         try:
             with contextlib.suppress(OSError):
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                flock(handle.fileno(), lock_ex)
             yield
         finally:
             with contextlib.suppress(OSError):
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                flock(handle.fileno(), lock_un)
             handle.close()
 
 
