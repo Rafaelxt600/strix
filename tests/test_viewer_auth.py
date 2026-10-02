@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import stat
+import sys
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from strix.interface.viewer import auth
+
+
+posix_only = pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX permission bits are not modelled on Windows"
+)
 
 
 def _iso(delta: timedelta) -> str:
@@ -86,6 +92,7 @@ def test_is_verified_accepts_epoch_expiry() -> None:
     assert auth.is_verified() is True
 
 
+@posix_only
 def test_write_auth_is_0600() -> None:
     auth.write_auth(email="a@b.com", token="t", verified_at="")  # nosec B106
     mode = stat.S_IMODE(auth.AUTH_PATH.stat().st_mode)
