@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from typing import TYPE_CHECKING
 
 import pytest
@@ -47,7 +48,8 @@ self-scoped information leak. Low: verbose errors.
 
 
 def _git(repo: Path, *args: str) -> None:
-    subprocess.run(["/usr/bin/env", "git", *args], cwd=repo, check=True)  # noqa: S603
+    cmd = ["git", *args] if sys.platform == "win32" else ["/usr/bin/env", "git", *args]
+    subprocess.run(cmd, cwd=repo, check=True)  # noqa: S603
 
 
 def _make_repo(tmp_path: Path, name: str = "repo") -> Path:

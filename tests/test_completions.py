@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from strix.interface.completions import completion_candidates, run_completions
 
 
@@ -132,8 +134,11 @@ def test_filesystem_completion_omits_terminal_control_names(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "safe.json").write_text("{}", encoding="utf-8")
-    (tmp_path / "unsafe\nname.json").write_text("{}", encoding="utf-8")
-    (tmp_path / "unsafe\x1b]52;c;payload\x07.json").write_text("{}", encoding="utf-8")
+    try:
+        (tmp_path / "unsafe\nname.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "unsafe\x1b]52;c;payload\x07.json").write_text("{}", encoding="utf-8")
+    except OSError:
+        pytest.skip("Filesystem does not support control characters in filenames")
 
     words = ["cloud", "scans", "start", "--data", "@"]
     assert completion_candidates(words) == ["@safe.json"]
