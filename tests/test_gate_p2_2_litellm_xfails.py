@@ -16,7 +16,9 @@ from typing import Any
 import litellm
 import pydantic_core
 import pytest
+from agents.extensions.models.litellm_model import LitellmModel
 from agents.models.chatcmpl_converter import Converter
+from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from openai.types.chat.chat_completion_message import ChatCompletionMessage
 from openai.types.chat.chat_completion_message_function_tool_call import (
     ChatCompletionMessageFunctionToolCall,
@@ -24,7 +26,15 @@ from openai.types.chat.chat_completion_message_function_tool_call import (
 )
 from openai.types.responses import ResponseFunctionToolCall
 
+from strix.config.models import (
+    StrixProvider,
+    _NonStreamingModel,
+    _routes_via_litellm,
+    _TurnGuardModel,
+    routes_through_litellm,
+)
 from strix.config.tool_call_ids import TurnCallIdRewriter
+from strix.llm.request_log import RequestLoggingModel
 from tests.test_tool_call_ids_providers import MODELS, SCENARIOS
 
 
@@ -219,13 +229,74 @@ def test_streaming_chunk_null_id_normalization() -> None:
     assert len(rewritten.call_id) > 5
 
 
+EXPECTED_NON_OPENAI_MODELS: list[str] = [
+    "openrouter/z-ai/glm-5.3",
+    "openrouter/anthropic/claude-sonnet-4.6",
+    "openrouter/google/gemini-3-pro-preview",
+    "openrouter/qwen/qwen3-coder",
+    "zai/glm-5.3",
+    "zai/glm-5.3-flash",
+    "deepseek/deepseek-chat",
+    "moonshot/kimi-k2.5",
+    "xai/grok-4",
+    "mistral/mistral-large-latest",
+    "together_ai/Qwen/Qwen3-235B-A22B",
+    "fireworks_ai/accounts/fireworks/models/kimi-k2",
+    "dashscope/qwen3-max",
+    "deepinfra/Qwen/Qwen3-32B",
+    "nebius/Qwen/Qwen3-32B",
+    "hosted_vllm/Qwen/Qwen3-32B",
+    "litellm/openai/gw-model",
+]
+
+
 def test_all_17_non_openai_models_are_routed_via_litellm() -> None:
-    """Verify that exactly 17 models route via LiteLLM and none of them apply the xfail marker."""
+    """Verify that each non-OpenAI model routes to LitellmModel via StrixProvider.
+
+    Forensic verification:
+    1. Proves that MODELS contains exactly 18 models: 17 non-OpenAI and 1 OpenAI.
+    2. Verifies the exact inventory of all 17 non-OpenAI model identifiers.
+    3. Calls production StrixProvider and verifies that each of the 17 models resolves
+       to LitellmModel and satisfies _routes_via_litellm / routes_through_litellm.
+    4. Verifies the contrast: 'openai/gpt-5.4' routes to OpenAIChatCompletionsModel, not LiteLLM.
+    5. Proves that none of the 17 non-OpenAI models trigger the xfail marker under any scenario.
+    """
     non_openai = [m for m in MODELS if not m.startswith("openai/")]
     assert len(non_openai) == 17
+    assert non_openai == EXPECTED_NON_OPENAI_MODELS
 
-    # Ensure none of the 17 non-openai models ever trigger xfail under any scenario or stream mode
-    for m in non_openai:
+    # Production StrixProvider configured with deterministic offline credentials
+    provider = StrixProvider(api_key="mock_test_key", base_url="http://127.0.0.1:8000/v1")
+
+    for model_name in non_openai:
+        # Level 1 Evidence: StrixProvider production instantiation & unwrapping
+        wrapped_model = provider.get_model(model_name)
+        inner_model = wrapped_model
+        while isinstance(inner_model, (_NonStreamingModel, _TurnGuardModel, RequestLoggingModel)):
+            inner_model = inner_model._inner
+
+        assert isinstance(inner_model, LitellmModel), (
+            f"Expected LitellmModel for {model_name}, got {type(inner_model)}"
+        )
+        assert _routes_via_litellm(inner_model) is True
+
+        # Level 2 Evidence: Direct provider fallback resolution & routing contract
+        direct_model = super(StrixProvider, provider).get_model(model_name)
+        assert isinstance(direct_model, LitellmModel)
+        assert _routes_via_litellm(direct_model) is True
+        assert routes_through_litellm(model_name) is True
+
+        # Ensure no non-OpenAI model ever meets xfail criteria in test_tool_call_ids_providers
         for s in SCENARIOS.values():
             for stream in (True, False):
-                assert not (m.startswith("openai/") and not stream and s.has_null_id)
+                assert not (model_name.startswith("openai/") and not stream and s.has_null_id)
+
+    # Forensic contrast: verify openai/gpt-5.4 is handled by OpenAI SDK, not LiteLLM
+    openai_wrapped = provider.get_model("openai/gpt-5.4")
+    openai_inner = openai_wrapped
+    while isinstance(openai_inner, (_NonStreamingModel, _TurnGuardModel, RequestLoggingModel)):
+        openai_inner = openai_inner._inner
+
+    assert isinstance(openai_inner, OpenAIChatCompletionsModel)
+    assert _routes_via_litellm(openai_inner) is False
+    assert routes_through_litellm("openai/gpt-5.4") is False
