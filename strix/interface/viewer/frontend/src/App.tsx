@@ -36,6 +36,7 @@ import {
   type LoadedRun,
   type RunsPayload,
 } from "@/data/serverSource";
+import { useRealtimeStream } from "@/data/realtimeSource";
 import { SIGNUP_URL, DEMO_URL, ctaUrl, trackCta } from "@/lib/cta";
 import { runTitle } from "@/lib/target-utils";
 import Sidebar from "@/components/Sidebar";
@@ -69,8 +70,7 @@ const POLL_MS = 500;
 
 export default function App() {
   const [activeRun, setActiveRun] = useState<string | null>(null);
-  const [run, setRun] = useState<LoadedRun | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [pollInterval, setPollInterval] = useState<number>(POLL_MS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("dashboard");
   const [auth, setAuth] = useState<AuthStatus | null>(null);
@@ -80,6 +80,21 @@ export default function App() {
   // Whether this viewer can steer a live scan (true only inside the in-TUI
   // launcher that shares the running scan's coordinator + event loop).
   const [canSteer, setCanSteer] = useState(false);
+
+  const {
+    run,
+    error,
+    telemetry,
+    isPaused,
+    bufferedCountWhilePaused,
+    pauseFeed,
+    resumeFeed,
+    triggerSync,
+    resetBuffer,
+  } = useRealtimeStream({
+    activeRun,
+    baseIntervalMs: pollInterval,
+  });
 
   const refreshAuth = useCallback(async () => {
     try {
@@ -107,74 +122,6 @@ export default function App() {
         /* absence of steering is the safe default */
       });
   }, [refreshAuth, refreshRuns]);
-
-  // Live polling, scoped to the active run. Re-runs when the active run changes
-  // so switching to a past run (?run=<name>) reloads its data; a finished run
-  // does a single full fetch and stops.
-  const finishedRef = useRef(false);
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    finishedRef.current = false;
-
-    const schedule = () => {
-      timer = setTimeout(tick, POLL_MS);
-    };
-
-    const tick = async () => {
-      if (cancelled) return;
-      try {
-        const { summary, raw, finished } = await fetchRunSummary(activeRun);
-        if (cancelled) return;
-        if (finished && !finishedRef.current) {
-          finishedRef.current = true;
-          const full = await fetchAll(activeRun);
-          if (!cancelled) setRun(full);
-          return; // stop polling
-        }
-        const [transcript, vulnerabilities] = await Promise.all([
-          fetchTranscript(activeRun).catch(() => ({ agents: [], events: [] })),
-          fetchVulnerabilities(summary.runId, activeRun).catch(() => [] as Vulnerability[]),
-        ]);
-        if (cancelled) return;
-        setRun((prev) => ({
-          summary,
-          raw,
-          finished,
-          transcript,
-          vulnerabilities,
-          reportMarkdown: prev?.reportMarkdown ?? null,
-        }));
-        schedule();
-      } catch (e) {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Could not load run data.");
-        schedule();
-      }
-    };
-
-    (async () => {
-      try {
-        const full = await fetchAll(activeRun);
-        if (cancelled) return;
-        setRun(full);
-        if (full.finished) {
-          finishedRef.current = true;
-        } else {
-          schedule();
-        }
-      } catch (e) {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Could not load run data.");
-        schedule();
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [activeRun]);
 
   const counts = useMemo(
     () => (run ? severityCounts(run.vulnerabilities) : null),
@@ -237,10 +184,8 @@ export default function App() {
   }, []);
 
   const selectRun = useCallback((name: string) => {
-    setActiveRun(name);
+    setActiveRun(name || null);
     setSelectedId(null);
-    setRun(null);
-    setError(null);
     // Reset the guard so the per-run default applies to the newly selected run.
     initialViewAppliedRef.current = false;
   }, []);
@@ -306,7 +251,8 @@ export default function App() {
             }}
             run={run}
             activeRunName={activeRun}
-            polling={!run?.finished}
+            polling={telemetry.connectionState === "CONNECTED" && !run?.finished}
+            telemetry={telemetry}
           />
 
           <main className="flex-1 overflow-y-auto bg-zinc-950 p-4 sm:p-6 lg:p-8">
@@ -355,6 +301,8 @@ export default function App() {
                         mcpConnections={mcpConnections}
                         onSelectView={userSetView}
                         onSelectFinding={(id: string) => setSelectedId(id)}
+                        telemetry={telemetry}
+                        error={error}
                       />
                     ) : view === "agents" ? (
                       <AgentsTab run={run} canSteer={canSteer} />
@@ -388,6 +336,11 @@ export default function App() {
                     ) : view === "events" ? (
                       <EventsView
                         run={run}
+                        telemetry={telemetry}
+                        isPaused={isPaused}
+                        bufferedCountWhilePaused={bufferedCountWhilePaused}
+                        onPause={pauseFeed}
+                        onResume={resumeFeed}
                       />
                     ) : view === "findings" || view === "issues" ? (
                       selected ? (
@@ -416,7 +369,8 @@ export default function App() {
                     ) : view === "settings" ? (
                       <SettingsView
                         run={run}
-                        pollInterval={POLL_MS}
+                        pollInterval={pollInterval}
+                        onUpdatePollInterval={(val) => setPollInterval(val)}
                       />
                     ) : (
                       <DashboardView
@@ -425,6 +379,8 @@ export default function App() {
                         mcpConnections={mcpConnections}
                         onSelectView={userSetView}
                         onSelectFinding={(id: string) => setSelectedId(id)}
+                        telemetry={telemetry}
+                        error={error}
                       />
                     )}
                   </>
@@ -437,7 +393,8 @@ export default function App() {
       <StatusBar
         run={run}
         mcpConnections={mcpConnections}
-        pollingMs={POLL_MS}
+        pollingMs={pollInterval}
+        telemetry={telemetry}
       />
       <TrustToast message={TRUST_BANNER} />
     </div>

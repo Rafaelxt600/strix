@@ -1,4 +1,3 @@
-import React from "react";
 import {
   Activity,
   Bot,
@@ -6,11 +5,14 @@ import {
   Clock,
   Layers,
   Radio,
+  RefreshCw,
   Shield,
   ShieldAlert,
   Target,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
-import type { ControlCenterView } from "@/types/control-center";
+import type { ControlCenterView, RealtimeTelemetry } from "@/types/control-center";
 import type { LoadedRun } from "@/data/serverSource";
 import { runTitle } from "@/lib/target-utils";
 import { cn } from "@/lib/utils";
@@ -20,7 +22,8 @@ interface TopBarProps {
   onSelectView: (view: ControlCenterView) => void;
   run: LoadedRun | null;
   activeRunName: string | null;
-  polling: boolean;
+  polling?: boolean;
+  telemetry?: RealtimeTelemetry;
 }
 
 export function TopBar({
@@ -28,13 +31,18 @@ export function TopBar({
   onSelectView,
   run,
   activeRunName,
-  polling,
+  polling = false,
+  telemetry,
 }: TopBarProps) {
   const isFinished = run?.finished ?? false;
   const primaryTarget = run?.summary.targets?.[0] ?? null;
   const targetLabel = run ? runTitle(primaryTarget, run.summary.runName || run.summary.runId || "Current run") : "No active scan";
   const agentCount = run?.transcript.agents.length ?? 0;
   const issuesCount = run?.vulnerabilities.length ?? 0;
+  const eventCount = run?.transcript.events.length ?? 0;
+
+  const connState = telemetry?.connectionState ?? (polling ? "CONNECTED" : isFinished ? "DISCONNECTED" : "CONNECTED");
+  const isLive = !isFinished && connState === "CONNECTED";
 
   return (
     <header className="sticky top-0 z-30 flex h-14 w-full flex-row items-center justify-between border-b border-white/10 bg-black/90 px-4 backdrop-blur-md">
@@ -155,19 +163,59 @@ export function TopBar({
           <span className="hidden md:inline">Events</span>
         </button>
 
-        {/* Polling / Connection Indicator */}
-        <div className="ml-2 flex items-center gap-1.5 rounded-md border border-white/10 bg-zinc-900/60 px-2.5 py-1 text-[11px] text-zinc-400 font-mono">
+        {/* Realtime Connection Status Indicator */}
+        <div
+          className={cn(
+            "ml-2 flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-mono transition-colors",
+            connState === "CONNECTED" && isLive
+              ? "border-emerald-500/30 bg-emerald-950/20 text-emerald-400"
+              : connState === "CONNECTING"
+              ? "border-cyan-500/30 bg-cyan-950/20 text-cyan-400"
+              : connState === "RECONNECTING"
+              ? "border-amber-500/30 bg-amber-950/20 text-amber-400"
+              : connState === "ERROR"
+              ? "border-rose-500/30 bg-rose-950/20 text-rose-400"
+              : "border-white/10 bg-zinc-900/60 text-zinc-400"
+          )}
+          title={`Connection: ${connState} • Transport: ${telemetry?.transportMode || "adaptive"} • Events/s: ${telemetry?.eventsPerSecond ?? 0}`}
+        >
           <span
             className={cn(
-              "h-1.5 w-1.5 rounded-full",
-              polling ? "bg-cyan-400 animate-ping" : isFinished ? "bg-zinc-500" : "bg-emerald-400"
+              "h-1.5 w-1.5 rounded-full shrink-0",
+              connState === "CONNECTED" && isLive
+                ? "bg-emerald-400 animate-pulse"
+                : connState === "CONNECTING"
+                ? "bg-cyan-400 animate-ping"
+                : connState === "RECONNECTING"
+                ? "bg-amber-400 animate-bounce"
+                : connState === "ERROR"
+                ? "bg-rose-500"
+                : isFinished
+                ? "bg-zinc-500"
+                : "bg-zinc-600"
             )}
           />
-          <span className="hidden lg:inline">
-            {isFinished ? "LOCAL DATA" : polling ? "SYNCING" : "CONNECTED"}
+          <span className="hidden lg:inline font-medium">
+            {connState === "CONNECTED"
+              ? isFinished
+                ? "FINISHED"
+                : "LIVE STREAM"
+              : connState === "CONNECTING"
+              ? "CONNECTING"
+              : connState === "RECONNECTING"
+              ? `RETRY ${telemetry?.reconnectAttempts || 1}`
+              : connState === "ERROR"
+              ? "CONN ERROR"
+              : "OFFLINE"}
           </span>
+          {isLive && (telemetry?.eventsPerSecond ?? 0) > 0 && (
+            <span className="hidden xl:inline text-[9px] text-emerald-300/80 font-mono">
+              ({telemetry?.eventsPerSecond} ev/s)
+            </span>
+          )}
         </div>
       </div>
     </header>
   );
 }
+

@@ -20,7 +20,7 @@ import {
   Wrench,
 } from "lucide-react";
 import type { LoadedRun, McpConnectionStatus } from "@/data/serverSource";
-import type { ControlCenterView } from "@/types/control-center";
+import type { ControlCenterView, RealtimeTelemetry } from "@/types/control-center";
 import { severityCounts } from "@/lib/local-run-parser";
 import { runTitle } from "@/lib/target-utils";
 import { cn } from "@/lib/utils";
@@ -33,6 +33,7 @@ interface DashboardViewProps {
   onSelectFinding?: (findingId: string) => void;
   onSelectVulnerability?: (findingId: string) => void;
   error?: string | null;
+  telemetry?: RealtimeTelemetry;
 }
 
 export function DashboardView({
@@ -43,8 +44,10 @@ export function DashboardView({
   onSelectFinding,
   onSelectVulnerability,
   error,
+  telemetry,
 }: DashboardViewProps) {
   const handleSelectFinding = onSelectFinding || onSelectVulnerability || (() => {});
+  const connState = telemetry?.connectionState ?? "CONNECTED";
   if (error) {
     return (
       <div className="flex h-96 flex-col items-center justify-center p-6 text-center">
@@ -98,9 +101,28 @@ export function DashboardView({
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  connState === "CONNECTED" && !finished
+                    ? "bg-emerald-400 animate-pulse"
+                    : connState === "CONNECTING"
+                    ? "bg-cyan-400 animate-ping"
+                    : connState === "RECONNECTING"
+                    ? "bg-amber-400 animate-bounce"
+                    : finished
+                    ? "bg-zinc-500"
+                    : "bg-zinc-600"
+                )}
+              />
               <span className="text-xs font-mono text-emerald-400 tracking-wider uppercase font-semibold">
-                Autonomous Security Mission Control
+                {connState === "CONNECTED" && !finished
+                  ? `Autonomous Security Mission Control • LIVE (${telemetry?.transportMode?.toUpperCase() || "STREAM"})`
+                  : connState === "RECONNECTING"
+                  ? `Reconnecting to local engine (Attempt ${telemetry?.reconnectAttempts || 1})...`
+                  : finished
+                  ? "Autonomous Security Mission Control • RUN FINISHED"
+                  : "Autonomous Security Mission Control"}
               </span>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
@@ -112,6 +134,11 @@ export function DashboardView({
               <span className={finished ? "text-zinc-400" : "text-emerald-400 font-semibold"}>
                 {finished ? "Completed" : "Active Scanning"}
               </span>
+              {telemetry?.lastHeartbeat && (
+                <span className="text-zinc-500 hidden sm:inline ml-2">
+                  • Last Sync: {new Date(telemetry.lastHeartbeat).toLocaleTimeString()}
+                </span>
+              )}
             </p>
           </div>
 
@@ -190,8 +217,17 @@ export function DashboardView({
             <span className="text-xs font-medium">Events</span>
             <Activity className="h-4 w-4 text-amber-400 group-hover:scale-110 transition-transform" />
           </div>
-          <div className="mt-2 text-2xl font-bold font-mono text-white">{eventCount}</div>
-          <div className="mt-1 text-[11px] text-zinc-500">Traced Operations</div>
+          <div className="mt-2 text-2xl font-bold font-mono text-white flex items-baseline gap-2">
+            <span>{eventCount}</span>
+            {(telemetry?.eventsPerSecond ?? 0) > 0 && (
+              <span className="text-xs font-normal text-emerald-400 font-mono">
+                {telemetry?.eventsPerSecond} ev/s
+              </span>
+            )}
+          </div>
+          <div className="mt-1 text-[11px] text-zinc-500">
+            {telemetry?.deduplicatedCount ? `${telemetry.deduplicatedCount} deduped • ` : ""}Traced Operations
+          </div>
         </div>
 
         {/* MCP Connectors */}

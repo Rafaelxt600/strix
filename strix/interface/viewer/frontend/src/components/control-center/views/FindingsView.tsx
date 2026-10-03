@@ -112,20 +112,46 @@ export function FindingsView({
 
       {/* Findings List */}
       <div className="rounded-xl border border-white/10 bg-zinc-950 p-5 space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-white/10">
-          <span className="text-sm font-semibold text-white font-mono">
-            Reported Findings ({filteredVulnerabilities.length})
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-white font-mono">
+              Reported Findings ({filteredVulnerabilities.length})
+            </span>
+          </div>
 
-          {severityFilter !== "all" && (
-            <button
-              type="button"
-              onClick={() => setSeverityFilter("all")}
-              className="text-xs text-zinc-400 hover:text-white font-mono"
-            >
-              Clear filter ({severityFilter})
-            </button>
-          )}
+          {/* Quick Severity Filter Tabs */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
+            {(["all", "critical", "high", "medium", "low"] as const).map((sev) => {
+              const count =
+                sev === "all"
+                  ? vulnerabilities.length
+                  : vulnerabilities.filter((v) => v.severity === sev).length;
+              return (
+                <button
+                  key={sev}
+                  type="button"
+                  onClick={() => setSeverityFilter(sev)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
+                    severityFilter === sev
+                      ? sev === "critical"
+                        ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                        : sev === "high"
+                        ? "bg-orange-500/20 text-orange-300 border border-orange-500/40"
+                        : sev === "medium"
+                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                        : sev === "low"
+                        ? "bg-blue-500/20 text-blue-300 border border-blue-500/40"
+                        : "bg-white/15 text-white"
+                      : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5 border border-transparent"
+                  )}
+                >
+                  <span className="capitalize">{sev}</span>
+                  <span className="text-[10px] opacity-70">({count})</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {filteredVulnerabilities.length === 0 ? (

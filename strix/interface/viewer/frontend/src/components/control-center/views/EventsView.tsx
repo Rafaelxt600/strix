@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Copy,
   Filter,
   Layers,
   MessageSquare,
@@ -16,22 +17,54 @@ import {
   Terminal,
   Trash2,
   Wrench,
+  Zap,
 } from "lucide-react";
 import type { LoadedRun, TranscriptEvent } from "@/data/serverSource";
+import type { RealtimeTelemetry } from "@/types/control-center";
 import { cn } from "@/lib/utils";
 
 interface EventsViewProps {
   run: LoadedRun | null;
+  telemetry?: RealtimeTelemetry;
+  isPaused?: boolean;
+  bufferedCountWhilePaused?: number;
+  onPause?: () => void;
+  onResume?: () => void;
 }
 
-export function EventsView({ run }: EventsViewProps) {
+export function EventsView({
+  run,
+  telemetry,
+  isPaused: externalIsPaused,
+  bufferedCountWhilePaused = 0,
+  onPause,
+  onResume,
+}: EventsViewProps) {
   const [filterType, setFilterType] = useState<"all" | "tool" | "chat">("all");
   const [search, setSearch] = useState<string>("");
   const [selectedAgentId, setSelectedAgentId] = useState<string>("all");
   const [autoScroll, setAutoScroll] = useState<boolean>(true);
-  const [isPaused, setIsPaused] = useState<boolean>(false);
+  const [localIsPaused, setLocalIsPaused] = useState<boolean>(false);
   const [clearedBeforeTimestamp, setClearedBeforeTimestamp] = useState<number | null>(null);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const isPaused = externalIsPaused ?? localIsPaused;
+  const togglePause = () => {
+    if (isPaused) {
+      if (onResume) onResume();
+      else setLocalIsPaused(false);
+    } else {
+      if (onPause) onPause();
+      else setLocalIsPaused(true);
+    }
+  };
+
+  const handleCopyJson = (id: string, obj: unknown) => {
+    navigator.clipboard.writeText(JSON.stringify(obj, null, 2));
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
 
   const containerRef = useRef<HTMLDivElement>(null);
   const events = run?.transcript.events || [];
@@ -94,6 +127,20 @@ export function EventsView({ run }: EventsViewProps) {
 
         {/* Action buttons */}
         <div className="flex flex-wrap items-center gap-2">
+          {telemetry && (
+            <div className="hidden sm:flex items-center gap-2 text-xs font-mono text-zinc-400 mr-2">
+              <span className="flex items-center gap-1 rounded bg-zinc-900 border border-white/10 px-2 py-1 text-emerald-400">
+                <Zap className="h-3 w-3" />
+                <span>{telemetry.eventsPerSecond} ev/s</span>
+              </span>
+              {telemetry.deduplicatedCount > 0 && (
+                <span className="rounded bg-zinc-900 border border-white/10 px-2 py-1 text-zinc-400">
+                  {telemetry.deduplicatedCount} deduped
+                </span>
+              )}
+            </div>
+          )}
+
           {clearedBeforeTimestamp && (
             <button
               type="button"
@@ -117,7 +164,7 @@ export function EventsView({ run }: EventsViewProps) {
 
           <button
             type="button"
-            onClick={() => setIsPaused((p) => !p)}
+            onClick={togglePause}
             className={cn(
               "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
               isPaused
@@ -144,6 +191,26 @@ export function EventsView({ run }: EventsViewProps) {
           </button>
         </div>
       </div>
+
+      {/* Pause Notification Banner */}
+      {isPaused && (
+        <div className="flex items-center justify-between rounded-lg border border-amber-500/40 bg-amber-500/10 px-3.5 py-2 text-xs text-amber-300 shrink-0">
+          <div className="flex items-center gap-2">
+            <Pause className="h-4 w-4 shrink-0 text-amber-400" />
+            <span>
+              <strong>Stream display paused for inspection.</strong> Ingestion continues in background
+              {bufferedCountWhilePaused > 0 && ` (${bufferedCountWhilePaused} new events buffered)`}.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={togglePause}
+            className="rounded bg-amber-500/20 px-2.5 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-500/30 transition-colors"
+          >
+            Resume Live Feed
+          </button>
+        </div>
+      )}
 
       {/* Filter Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-zinc-950 p-2 text-xs shrink-0">
@@ -280,8 +347,31 @@ export function EventsView({ run }: EventsViewProps) {
 
                 {/* Expanded Payload Viewer */}
                 {isExpanded && (
-                  <div className="mt-2.5 rounded bg-zinc-950 p-3 text-[11px] border border-white/10 overflow-x-auto text-zinc-300">
-                    <pre className="whitespace-pre-wrap break-all">
+                  <div className="mt-2.5 rounded bg-zinc-950 p-3 text-[11px] border border-white/10 text-zinc-300 relative group">
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/5 text-[10px] text-zinc-500">
+                      <span>Event ID: {ev.id}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopyJson(ev.id, ev);
+                        }}
+                        className="flex items-center gap-1 text-zinc-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded px-2 py-0.5"
+                      >
+                        {copiedId === ev.id ? (
+                          <>
+                            <Check className="h-3 w-3 text-emerald-400" />
+                            <span className="text-emerald-400">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3 w-3" />
+                            <span>Copy JSON</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <pre className="whitespace-pre-wrap break-all overflow-x-auto max-h-96">
                       {JSON.stringify(ev, null, 2)}
                     </pre>
                   </div>

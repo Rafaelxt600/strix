@@ -1,3 +1,24 @@
+export type ConnectionState =
+  | "CONNECTED"
+  | "CONNECTING"
+  | "RECONNECTING"
+  | "DISCONNECTED"
+  | "ERROR";
+
+export type TransportMode = "realtime" | "polling" | "offline";
+
+export interface RealtimeTelemetry {
+  connectionState: ConnectionState;
+  transportMode: TransportMode;
+  reconnectAttempts: number;
+  lastHeartbeat: string | null;
+  totalEventsReceived: number;
+  deduplicatedCount: number;
+  eventsPerSecond: number;
+  bufferSize: number;
+  isPaused: boolean;
+}
+
 export type ControlCenterView =
   | "dashboard"
   | "agents"

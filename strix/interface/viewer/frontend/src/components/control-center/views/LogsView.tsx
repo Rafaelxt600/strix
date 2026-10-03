@@ -232,7 +232,16 @@ export function LogsView({ events, agents }: LogsViewProps) {
             {isPaused ? "Resume" : "Pause"}
           </button>
 
-          {/* Clear View (non-destructive) */}
+          {/* Clear / Restore View (non-destructive) */}
+          {clearedBeforeIndex >= 0 && (
+            <button
+              onClick={() => setClearedBeforeIndex(-1)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 transition-colors"
+              title="Restore full log stream"
+            >
+              Restore View
+            </button>
+          )}
           <button
             onClick={handleClearView}
             className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 transition-colors"
