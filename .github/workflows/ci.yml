@@ -1,0 +1,77 @@
+name: CI
+
+"on":
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-ci:
+    name: Windows CI (Python 3.12, Node 22)
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Node.js 22 (LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'strix/interface/viewer/frontend/package-lock.json'
+
+      - name: Sync Python dependencies
+        run: uv sync --frozen
+
+      - name: Run Ruff linter
+        run: uv run ruff check .
+
+      - name: Run MyPy static type checker
+        run: uv run mypy strix
+
+      - name: Run Pytest test suite
+        run: uv run pytest -v
+
+      - name: Install frontend dependencies
+        working-directory: strix/interface/viewer/frontend
+        run: npm ci
+
+      - name: Check TypeScript types
+        working-directory: strix/interface/viewer/frontend
+        run: npx tsc --noEmit
+
+      - name: Build frontend production bundle
+        working-directory: strix/interface/viewer/frontend
+        run: npm run build
+
+      - name: Verify frontend bundle size (P2 protection)
+        run: >
+          uv run python -c "from pathlib import Path; assets = list(Path('strix/interface/viewer/static/assets').glob('*.js')); assert assets, 'No assets found'; oversized = [f for f in assets if f.stat().st_size > 500 * 1024]; assert not oversized, f'Oversized chunks: {oversized}'; max_size = max(f.stat().st_size for f in assets) / 1024; print(f'All {len(assets)} JS chunks within 500KB budget. Max chunk: {max_size:.2f} KB')"
