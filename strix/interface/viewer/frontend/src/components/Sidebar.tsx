@@ -7,6 +7,14 @@ import {
   Mail,
   LogOut,
   ChevronsUpDown,
+  LayoutDashboard,
+  Layers,
+  Target,
+  Activity,
+  Wrench,
+  Radio,
+  FileText,
+  Settings,
 } from "lucide-react";
 import { LuGitPullRequestArrow } from "react-icons/lu";
 import { VscExtensions } from "react-icons/vsc";
@@ -230,37 +238,71 @@ export default function Sidebar({
         <nav className="relative min-w-[160px] flex-1 overflow-y-auto overflow-x-clip scrollbar-thin pb-10 pt-2">
           <div className="relative flex flex-col gap-px px-2">
             <NavItem
-              icon={<ProjectsIcon />}
-              label="Pentest Overview"
-              active={view === "overview"}
-              onClick={() => onSelectView("overview")}
+              icon={<LayoutDashboard className="h-4 w-4" />}
+              label="Dashboard"
+              active={view === "dashboard" || view === "overview"}
+              onClick={() => onSelectView("dashboard")}
+            />
+            <NavItem
+              icon={<Bot className="h-4 w-4" />}
+              label="Agents"
+              count={agentCount > 0 ? agentCount : undefined}
+              active={view === "agents"}
+              onClick={() => onSelectView("agents")}
+            />
+            <NavItem
+              icon={<Layers className="h-4 w-4" />}
+              label="Sessions"
+              count={runCount > 0 ? runCount : undefined}
+              active={view === "sessions" || view === "history"}
+              onClick={() => onSelectView("sessions")}
+            />
+            <NavItem
+              icon={<Target className="h-4 w-4" />}
+              label="Targets"
+              active={view === "targets"}
+              onClick={() => onSelectView("targets")}
+            />
+            <NavItem
+              icon={<Activity className="h-4 w-4" />}
+              label="Scans"
+              active={view === "scans"}
+              onClick={() => onSelectView("scans")}
+            />
+            <NavItem
+              icon={<Wrench className="h-4 w-4" />}
+              label="Tools"
+              active={view === "tools"}
+              onClick={() => onSelectView("tools")}
+            />
+            <NavItem
+              icon={<Radio className="h-4 w-4" />}
+              label="Events"
+              active={view === "events"}
+              onClick={() => onSelectView("events")}
             />
             <NavItem
               icon={<AlertTriangle className="h-4 w-4" />}
-              label="Issues"
+              label="Findings"
               count={issuesCount > 0 ? issuesCount : undefined}
-              active={view === "issues"}
-              onClick={() => onSelectView("issues")}
+              active={view === "findings" || view === "issues"}
+              onClick={() => onSelectView("findings")}
             />
-            {agentCount > 0 && (
-              <NavItem
-                icon={<Bot className="h-4 w-4" />}
-                label="Agents"
-                count={agentCount}
-                active={view === "agents"}
-                onClick={() => onSelectView("agents")}
-              />
-            )}
+            <NavItem
+              icon={<FileText className="h-4 w-4" />}
+              label="Logs"
+              active={view === "logs"}
+              onClick={() => onSelectView("logs")}
+            />
+            <NavItem
+              icon={<Settings className="h-4 w-4" />}
+              label="Settings"
+              active={view === "settings"}
+              onClick={() => onSelectView("settings")}
+            />
             {mcpConnections.length > 0 && (
               <McpConnectionsPanel connections={mcpConnections} inUse={mcpInUse} />
             )}
-            <NavItem
-              icon={<History className="h-4 w-4" />}
-              label="Past runs"
-              count={runCount > 0 ? runCount : undefined}
-              active={view === "history"}
-              onClick={onOpenHistory}
-            />
             {finished && (
               <NavItem
                 icon={<Mail className="h-4 w-4" />}

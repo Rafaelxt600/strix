@@ -46,7 +46,20 @@ import { TrustToast } from "@/components/TrustToast";
 import FeedbackView from "@/components/FeedbackView";
 import { ProInlineCta } from "@/components/ProCta";
 
-export type View = "overview" | "issues" | "agents" | "history" | "email" | "feedback";
+import type { ControlCenterView } from "@/types/control-center";
+import { TopBar } from "@/components/control-center/TopBar";
+import { StatusBar } from "@/components/control-center/StatusBar";
+import { DashboardView } from "@/components/control-center/views/DashboardView";
+import { SessionsView } from "@/components/control-center/views/SessionsView";
+import { TargetsView } from "@/components/control-center/views/TargetsView";
+import { ScansView } from "@/components/control-center/views/ScansView";
+import { ToolsView } from "@/components/control-center/views/ToolsView";
+import { EventsView } from "@/components/control-center/views/EventsView";
+import { FindingsView } from "@/components/control-center/views/FindingsView";
+import { LogsView } from "@/components/control-center/views/LogsView";
+import { SettingsView } from "@/components/control-center/views/SettingsView";
+
+export type View = ControlCenterView;
 
 const TRUST_BANNER =
   "Your findings stay on your machine. They're rendered here locally in your browser and never uploaded or stored by Strix.";
@@ -59,7 +72,7 @@ export default function App() {
   const [run, setRun] = useState<LoadedRun | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [view, setView] = useState<View>("overview");
+  const [view, setView] = useState<View>("dashboard");
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [runs, setRuns] = useState<RunsPayload | null>(null);
   const [emailPurpose, setEmailPurpose] = useState<"report" | "verify">("report");
@@ -207,7 +220,7 @@ export default function App() {
     if (initialViewAppliedRef.current || !run) return;
     if (run.finished) {
       initialViewAppliedRef.current = true;
-      setView("overview");
+      setView("dashboard");
     } else if (agentCount > 0) {
       // Live and agents have appeared: default to the agent graph. If it is
       // live but no agents exist yet, wait (do not apply, do not set the flag).
@@ -246,7 +259,7 @@ export default function App() {
 
   const openHistory = useCallback(() => {
     void refreshRuns();
-    userSetView("history");
+    userSetView("sessions");
   }, [refreshRuns, userSetView]);
 
   const onPastRunsVerified = useCallback(async () => {
@@ -261,171 +274,171 @@ export default function App() {
   }, [refreshAuth, refreshRuns]);
 
   return (
-    <div className="min-h-screen bg-black text-white flex">
-      <Sidebar
-        view={view}
-        onSelectView={(v) => {
-          // Clicking a sidebar view always lands on that section's top level,
-          // so leaving a specific issue's detail view and clicking "Issues"
-          // returns to the full findings list.
-          setSelectedId(null);
-          if (v === "history") openHistory();
-          else userSetView(v);
-        }}
-        issuesCount={run?.vulnerabilities.length ?? 0}
-        agentCount={agentCount}
-        mcpConnections={mcpConnections}
-        mcpInUse={mcpInUse}
-        runCount={runs?.count ?? 0}
-        finished={run?.finished ?? false}
-        verified={verified}
-        email={auth?.email ?? null}
-        onOpenEmail={openEmail}
-        onOpenHistory={openHistory}
-        onForget={() => void onForget()}
-      />
+    <div className="min-h-screen bg-black text-white flex flex-col">
+      <div className="flex-1 flex min-h-0">
+        <Sidebar
+          view={view}
+          onSelectView={(v) => {
+            setSelectedId(null);
+            if (v === "history" || v === "sessions") openHistory();
+            else userSetView(v);
+          }}
+          issuesCount={run?.vulnerabilities.length ?? 0}
+          agentCount={agentCount}
+          mcpConnections={mcpConnections}
+          mcpInUse={mcpInUse}
+          runCount={runs?.count ?? 0}
+          finished={run?.finished ?? false}
+          verified={verified}
+          email={auth?.email ?? null}
+          onOpenEmail={openEmail}
+          onOpenHistory={openHistory}
+          onForget={() => void onForget()}
+        />
 
-      <div className="flex-1 min-w-0">
-        {/* Top bar */}
-        <div className="border-b border-[#222]">
-          <div className="max-w-[88rem] mx-auto px-3 sm:px-6 py-4 flex items-center gap-1.5">
-            <a
-              href={ctaUrl("https://app.strix.ai", "logo")}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => trackCta("logo", "topbar")}
-              className="flex items-center gap-1.5 opacity-90 transition-opacity hover:opacity-100 lg:hidden"
-              title="Open Strix Cloud"
-            >
-              <img src="./logo.png" alt="Strix" className="w-10 h-8 object-cover" />
-              <div className="text-base text-white font-medium tracking-tight">Strix</div>
-            </a>
-            {run && <LiveIndicator finished={run.finished} />}
-            <div className="ml-auto flex items-center gap-3">
-              {verified && runs && !runs.locked && runs.runs.length > 0 && (
-                <RunSwitcher
-                  runs={runs}
-                  activeRun={activeRun}
-                  launchedName={runTitle(run?.summary.targets[0] ?? null, run?.summary.runName ?? run?.summary.runId ?? "Current run")}
-                  onSelect={selectRun}
-                />
-              )}
-              <a
-                href={ctaUrl(SIGNUP_URL, "run_in_cloud")}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => trackCta("run_in_cloud", "topbar")}
-                className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-black transition-opacity hover:opacity-90"
-              >
-                Run in the cloud
-                <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
-              </a>
-            </div>
-          </div>
-        </div>
+        <div className="flex-1 min-w-0 flex flex-col h-[calc(100vh-28px)] overflow-hidden">
+          {/* Top bar */}
+          <TopBar
+            activeView={view}
+            onSelectView={(v) => {
+              setSelectedId(null);
+              userSetView(v);
+            }}
+            run={run}
+            activeRunName={activeRun}
+            polling={!run?.finished}
+          />
 
-        <div className="max-w-[88rem] mx-auto px-3 sm:px-6 py-8 sm:py-12 space-y-6">
-          {error && !run && view !== "history" && view !== "email" && (
-            <div className="rounded-lg px-4 py-3 flex gap-3 items-start border border-red-500/30 bg-red-500/5">
-              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-400" aria-hidden="true" />
-              <p className="text-sm text-red-300">{error}</p>
-            </div>
-          )}
-
-          {/* Keyed wrapper: re-mounts on every view / finding / run change so the
-              page-in transition replays. */}
-          <div
-            key={`${activeRun ?? "launched"}:${view}:${selectedId ?? ""}`}
-            className="animate-page-in space-y-6"
-          >
-          {view === "email" ? (
-            <EmailReportView
-              activeRun={activeRun}
-              auth={auth}
-              purpose={emailPurpose}
-              skipDisclosure={emailSkipDisclosure}
-              onAuthChanged={() => {
-                void refreshAuth();
-                void refreshRuns();
-              }}
-              onExit={(dest) => setView(dest === "history" ? "history" : "overview")}
-            />
-          ) : view === "feedback" ? (
-            <FeedbackView
-              defaultEmail={auth?.email ?? null}
-              onExit={(dest) => setView(dest)}
-            />
-          ) : view === "history" ? (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <History className="w-5 h-5 text-[#888]" aria-hidden="true" />
-                <h1 className="text-2xl font-semibold text-white">Past runs</h1>
-              </div>
-              <PastRunsView
-                runs={runs}
-                activeRun={activeRun}
-                onSelectRun={selectRun}
-                onVerified={() => void onPastRunsVerified()}
-              />
-            </div>
-          ) : !run && !error ? (
-            <div className="rounded-xl border border-[#222] bg-[rgba(255,255,255,0.02)] p-10 text-center">
-              <div className="w-6 h-6 mx-auto mb-3 rounded-full border-2 border-[#333] border-t-white animate-spin" />
-              <p className="text-sm text-[#888]">Loading run data…</p>
-            </div>
-          ) : run && counts ? (
-            <>
-              <SummaryHeader summary={run.summary} />
-
-              {/* Tab strip: shown on small screens where the sidebar is hidden. */}
-              <div className="flex gap-5 border-b border-[#2a2a2a] lg:hidden">
-                <TabButton active={view === "overview"} onClick={() => userSetView("overview")}>
-                  Pentest Overview
-                </TabButton>
-                <TabButton active={view === "issues"} onClick={() => userSetView("issues")}>
-                  Issues{run.vulnerabilities.length > 0 ? ` (${run.vulnerabilities.length})` : ""}
-                </TabButton>
-                {agentCount > 0 && (
-                  <TabButton active={view === "agents"} onClick={() => userSetView("agents")}>
-                    Agents ({agentCount})
-                  </TabButton>
-                )}
-              </div>
-
-              {view === "overview" ? (
-                <OverviewTab
-                  summary={run.summary}
-                  counts={counts}
-                  total={run.vulnerabilities.length}
-                  reportMarkdown={run.reportMarkdown}
-                  raw={run.raw}
-                  finished={run.finished}
-                  onOpenEmail={openEmailFromOverview}
-                />
-              ) : view === "agents" && agentCount > 0 ? (
-                <AgentsTab run={run} canSteer={canSteer} />
-              ) : selected ? (
-                <div className="space-y-4">
-                  <button
-                    onClick={() => setSelectedId(null)}
-                    className="cursor-pointer inline-flex items-center gap-1.5 text-sm text-[#888] hover:text-white transition-colors"
-                  >
-                    <ArrowLeft className="w-4 h-4" /> Back to all findings
-                  </button>
-                  <VulnerabilityDetail vulnerability={selected} />
+          <main className="flex-1 overflow-y-auto bg-zinc-950 p-4 sm:p-6 lg:p-8">
+            <div className="max-w-[88rem] mx-auto space-y-6">
+              {error && !run && view !== "sessions" && view !== "history" && view !== "email" && (
+                <div className="rounded-lg px-4 py-3 flex gap-3 items-start border border-red-500/30 bg-red-500/5">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-400" aria-hidden="true" />
+                  <p className="text-sm text-red-300">{error}</p>
                 </div>
-              ) : (
-                <FindingsList
-                  vulnerabilities={run.vulnerabilities}
-                  finished={run.finished}
-                  onSelect={(id) => setSelectedId(id)}
-                />
               )}
-            </>
-          ) : null}
-          </div>
+
+              {/* Keyed wrapper: re-mounts on every view / finding / run change so the
+                  page-in transition replays. */}
+              <div
+                key={`${activeRun ?? "launched"}:${view}:${selectedId ?? ""}`}
+                className="animate-page-in space-y-6"
+              >
+                {view === "email" ? (
+                  <EmailReportView
+                    activeRun={activeRun}
+                    auth={auth}
+                    purpose={emailPurpose}
+                    skipDisclosure={emailSkipDisclosure}
+                    onAuthChanged={() => {
+                      void refreshAuth();
+                      void refreshRuns();
+                    }}
+                    onExit={(dest) => setView(dest === "history" ? "sessions" : "dashboard")}
+                  />
+                ) : view === "feedback" ? (
+                  <FeedbackView
+                    defaultEmail={auth?.email ?? null}
+                    onExit={(dest) => setView(dest as View)}
+                  />
+                ) : !run && !error ? (
+                  <div className="rounded-xl border border-[#222] bg-[rgba(255,255,255,0.02)] p-10 text-center">
+                    <div className="w-6 h-6 mx-auto mb-3 rounded-full border-2 border-[#333] border-t-white animate-spin" />
+                    <p className="text-sm text-[#888]">Loading run data…</p>
+                  </div>
+                ) : run ? (
+                  <>
+                    {view === "dashboard" || view === "overview" ? (
+                      <DashboardView
+                        run={run}
+                        activeRunName={activeRun}
+                        mcpConnections={mcpConnections}
+                        onSelectView={userSetView}
+                        onSelectFinding={(id: string) => setSelectedId(id)}
+                      />
+                    ) : view === "agents" ? (
+                      <AgentsTab run={run} canSteer={canSteer} />
+                    ) : view === "sessions" || view === "history" ? (
+                      <SessionsView
+                        currentRun={run}
+                        activeRunName={activeRun}
+                        runsPayload={runs}
+                        onSelectRun={(name: string | null) => selectRun(name || "")}
+                      />
+                    ) : view === "targets" ? (
+                      <TargetsView
+                        run={run}
+                        onSelectVulnerability={(id: string) => {
+                          setSelectedId(id);
+                          userSetView("findings");
+                        }}
+                      />
+                    ) : view === "scans" ? (
+                      <ScansView
+                        run={run}
+                        canSteer={canSteer}
+                        onSelectView={userSetView}
+                      />
+                    ) : view === "tools" ? (
+                      <ToolsView
+                        run={run}
+                        mcpConnections={mcpConnections}
+                        mcpInUse={mcpInUse}
+                      />
+                    ) : view === "events" ? (
+                      <EventsView
+                        run={run}
+                      />
+                    ) : view === "findings" || view === "issues" ? (
+                      selected ? (
+                        <div className="space-y-4">
+                          <button
+                            onClick={() => setSelectedId(null)}
+                            className="cursor-pointer inline-flex items-center gap-1.5 text-sm text-[#888] hover:text-white transition-colors"
+                          >
+                            <ArrowLeft className="w-4 h-4" /> Back to all findings
+                          </button>
+                          <VulnerabilityDetail vulnerability={selected} />
+                        </div>
+                      ) : (
+                        <FindingsView
+                          vulnerabilities={run.vulnerabilities}
+                          finished={run.finished}
+                          selectedFindingId={selectedId}
+                          onSelectFinding={(id: string | null) => setSelectedId(id)}
+                        />
+                      )
+                    ) : view === "logs" ? (
+                      <LogsView
+                        events={run.transcript.events}
+                        agents={run.transcript.agents}
+                      />
+                    ) : view === "settings" ? (
+                      <SettingsView
+                        run={run}
+                        pollInterval={POLL_MS}
+                      />
+                    ) : (
+                      <DashboardView
+                        run={run}
+                        activeRunName={activeRun}
+                        mcpConnections={mcpConnections}
+                        onSelectView={userSetView}
+                        onSelectFinding={(id: string) => setSelectedId(id)}
+                      />
+                    )}
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </main>
         </div>
       </div>
+      <StatusBar
+        run={run}
+        mcpConnections={mcpConnections}
+        pollingMs={POLL_MS}
+      />
       <TrustToast message={TRUST_BANNER} />
     </div>
   );
