@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from strix.config import load_settings
+from strix.utils.resource_paths import get_strix_resource_path
 
 
 logger = logging.getLogger(__name__)
@@ -297,9 +298,15 @@ class ToolManager:
         )
 
 
-def build_default_tool_manager() -> ToolManager:
+def build_default_tool_manager(resolver: ToolResolver | None = None) -> ToolManager:
     """Construct and populate a ToolManager with Strix's canonical Go and security tools."""
-    manager = ToolManager()
+    if resolver is None:
+        default_paths = [
+            get_strix_resource_path("bin"),
+            Path(__file__).resolve().parents[2] / "build" / "sidecar",
+        ]
+        resolver = ToolResolver(extra_search_paths=default_paths)
+    manager = ToolManager(resolver=resolver)
 
     tools = [
         ToolDefinition(
@@ -368,10 +375,7 @@ def build_default_tool_manager() -> ToolManager:
             version_args=["-version"],
             version_pattern=r"naabu\s+([v\d\.]+)",
             simulated_output=(
-                "[EMULATED SANDBOX - DRY RUN MODE]\n"
-                "target:80\n"
-                "target:443\n"
-                "target:8080\n"
+                "[EMULATED SANDBOX - DRY RUN MODE]\ntarget:80\ntarget:443\ntarget:8080\n"
             ),
         ),
         ToolDefinition(
@@ -424,8 +428,7 @@ def build_default_tool_manager() -> ToolManager:
             version_args=["-version"],
             version_pattern=r"govulncheck\s+([v\d\.]+)",
             simulated_output=(
-                "[EMULATED SANDBOX - DRY RUN MODE]\n"
-                "govulncheck: No vulnerabilities found.\n"
+                "[EMULATED SANDBOX - DRY RUN MODE]\ngovulncheck: No vulnerabilities found.\n"
             ),
         ),
         ToolDefinition(
@@ -440,8 +443,7 @@ def build_default_tool_manager() -> ToolManager:
             version_args=["-version"],
             version_pattern=r"interactsh-client\s+([v\d\.]+)",
             simulated_output=(
-                "[EMULATED SANDBOX - DRY RUN MODE]\n"
-                "[INF] Client session started: xyz.interact.sh\n"
+                "[EMULATED SANDBOX - DRY RUN MODE]\n[INF] Client session started: xyz.interact.sh\n"
             ),
         ),
         ToolDefinition(
@@ -455,10 +457,7 @@ def build_default_tool_manager() -> ToolManager:
             ),
             version_args=["--version"],
             version_pattern=r"strix-tui\s+([v\d\.]+)",
-            simulated_output=(
-                "[EMULATED SANDBOX - DRY RUN MODE]\n"
-                "strix-tui v1.6.2 (emulated)\n"
-            ),
+            simulated_output=("[EMULATED SANDBOX - DRY RUN MODE]\nstrix-tui v1.6.2 (emulated)\n"),
         ),
     ]
 

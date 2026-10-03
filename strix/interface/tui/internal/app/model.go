@@ -55,6 +55,11 @@ func SetVersion(v string) {
 	}
 }
 
+// Version returns the currently configured version string.
+func Version() string {
+	return appVersion
+}
+
 type modalMode int
 
 const (
