@@ -248,6 +248,7 @@ ignore = [
 # MCP connection request in a test carries a dummy bearer token.
 "tests/test_runner_root_prompt.py" = ["S106"]
 "tests/test_gate_ui_05_evidence_reporting.py" = ["S105", "S106", "S310"]
+"tests/test_gate_e2e_01_real_execution.py" = ["S105", "S106", "S310", "PLR0915", "BLE001", "N802", "E501"]
 # Stdlib HTTP handler overrides (do_GET/do_POST) and lazy imports that avoid a
 # circular dependency with strix.telemetry / strix.interface.viewer.report_pdf.
 "strix/interface/viewer/server.py" = ["N802", "PLC0415"]

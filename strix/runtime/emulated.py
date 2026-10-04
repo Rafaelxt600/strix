@@ -17,14 +17,15 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+from agents.sandbox.manifest import Manifest
 from agents.sandbox.session import BaseSandboxSession
 from agents.sandbox.types import ExecResult, ExposedPortEndpoint
+from pydantic import BaseModel, Field
 
 
 if TYPE_CHECKING:
-    from agents.sandbox.manifest import Manifest
     from agents.sandbox.types import User
 
 
@@ -32,6 +33,11 @@ logger = logging.getLogger(__name__)
 
 # Common workspace root matching the in-container path
 _WORKSPACE_ROOT = "/workspace"
+
+
+class EmulatedSessionState(BaseModel):
+    manifest: Manifest = Field(default_factory=Manifest)
+    workspace_root_ready: bool = True
 
 
 class EmulatedSandboxSession(BaseSandboxSession):
@@ -55,7 +61,9 @@ class EmulatedSandboxSession(BaseSandboxSession):
 
         self.workspace_path = self.workspace_dir
         self.id = f"emulated-session-{uuid.uuid4().hex[:8]}"
-        self.manifest = manifest
+        resolved_manifest = manifest if manifest is not None else Manifest()
+        self.manifest = resolved_manifest
+        self.state = cast("Any", EmulatedSessionState(manifest=resolved_manifest))
         self.bind_mounts = bind_mounts or []
         self._running = True
         self.execution_log: list[dict[str, Any]] = []
