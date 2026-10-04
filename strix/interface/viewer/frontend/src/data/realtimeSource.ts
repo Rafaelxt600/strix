@@ -30,6 +30,7 @@ export interface RealtimeStreamResult {
   bufferedCountWhilePaused: number;
   pauseFeed: () => void;
   resumeFeed: () => void;
+  viewQueuedEvents: () => void;
   triggerSync: () => Promise<void>;
   resetBuffer: () => void;
 }
@@ -144,6 +145,7 @@ export function useRealtimeStream({
   const dedupRef = useRef(new EventStreamDeduplicator(maxBufferEvents));
   const finishedRef = useRef<boolean>(false);
   const pausedSnapshotEventsRef = useRef<TranscriptEvent[] | null>(null);
+  const latestAllEventsRef = useRef<TranscriptEvent[]>([]);
 
   // Keep deduplicator updated if maxBuffer changes
   useEffect(() => {
@@ -155,6 +157,7 @@ export function useRealtimeStream({
     dedupRef.current.reset();
     finishedRef.current = false;
     pausedSnapshotEventsRef.current = null;
+    latestAllEventsRef.current = [];
     setBufferedCountWhilePaused(0);
     setConnectionState("CONNECTING");
     setError(null);
@@ -187,6 +190,35 @@ export function useRealtimeStream({
     setIsPaused(false);
     pausedSnapshotEventsRef.current = null;
     setBufferedCountWhilePaused(0);
+    if (latestAllEventsRef.current.length > 0) {
+      setRun((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          transcript: {
+            ...prev.transcript,
+            events: [...latestAllEventsRef.current],
+          },
+        };
+      });
+    }
+  }, []);
+
+  const viewQueuedEvents = useCallback(() => {
+    if (latestAllEventsRef.current.length > 0) {
+      pausedSnapshotEventsRef.current = [...latestAllEventsRef.current];
+      setBufferedCountWhilePaused(0);
+      setRun((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          transcript: {
+            ...prev.transcript,
+            events: [...latestAllEventsRef.current],
+          },
+        };
+      });
+    }
   }, []);
 
   const resetBuffer = useCallback(() => {
@@ -243,6 +275,7 @@ export function useRealtimeStream({
 
         deduplicatedCountRef.current = dedupCount;
         totalEventsRef.current = merged.length;
+        latestAllEventsRef.current = merged;
         recordEventArrivals(newCount);
 
         if (isPaused) {
@@ -358,6 +391,18 @@ export function useRealtimeStream({
     };
   }, [activeRun, baseIntervalMs, executeTick, reconnectAttempts]);
 
+  const errorCount = (run?.transcript.events || []).filter((ev) => {
+    const d = (ev.data as Record<string, unknown>) || {};
+    return (
+      d.error != null ||
+      d.is_error === true ||
+      d.status === "failed" ||
+      d.status === "error" ||
+      d.event_type === "error" ||
+      (ev as unknown as { type: string }).type === "error"
+    );
+  }).length;
+
   const telemetry: RealtimeTelemetry = {
     connectionState,
     transportMode,
@@ -368,6 +413,7 @@ export function useRealtimeStream({
     eventsPerSecond: eventsPerSec,
     bufferSize: run?.transcript.events.length || 0,
     isPaused,
+    errorCount,
   };
 
   return {
@@ -378,6 +424,7 @@ export function useRealtimeStream({
     bufferedCountWhilePaused,
     pauseFeed,
     resumeFeed,
+    viewQueuedEvents,
     triggerSync: executeTick,
     resetBuffer,
   };

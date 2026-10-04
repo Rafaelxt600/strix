@@ -61,6 +61,7 @@ export function LogsView({ events, agents }: LogsViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string>("ALL");
   const [isPaused, setIsPaused] = useState(false);
+  const [pausedSnapshotIndex, setPausedSnapshotIndex] = useState<number | null>(null);
   const [clearedBeforeIndex, setClearedBeforeIndex] = useState<number>(-1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [maskActive, setMaskActive] = useState<boolean>(true);
@@ -115,9 +116,25 @@ export function LogsView({ events, agents }: LogsViewProps) {
     });
   }, [events, agentNameMap]);
 
+  const bufferedLogsCount = useMemo(() => {
+    if (!isPaused || pausedSnapshotIndex === null) return 0;
+    return Math.max(0, allLogs.length - pausedSnapshotIndex);
+  }, [isPaused, pausedSnapshotIndex, allLogs.length]);
+
+  const togglePause = () => {
+    if (isPaused) {
+      setIsPaused(false);
+      setPausedSnapshotIndex(null);
+    } else {
+      setIsPaused(true);
+      setPausedSnapshotIndex(allLogs.length);
+    }
+  };
+
   const visibleLogs = useMemo(() => {
     return allLogs
       .filter((_, idx) => idx > clearedBeforeIndex)
+      .filter((_, idx) => (pausedSnapshotIndex !== null ? idx < pausedSnapshotIndex : true))
       .filter((log) => {
         if (levelFilter !== "ALL" && log.level !== levelFilter) return false;
         if (sourceFilter !== "ALL" && log.source !== sourceFilter) return false;
@@ -129,7 +146,7 @@ export function LogsView({ events, agents }: LogsViewProps) {
         }
         return true;
       });
-  }, [allLogs, clearedBeforeIndex, levelFilter, sourceFilter, searchQuery]);
+  }, [allLogs, clearedBeforeIndex, pausedSnapshotIndex, levelFilter, sourceFilter, searchQuery]);
 
   // Auto-scroll when not paused
   useEffect(() => {
@@ -221,7 +238,7 @@ export function LogsView({ events, agents }: LogsViewProps) {
 
           {/* Pause / Resume */}
           <button
-            onClick={() => setIsPaused(!isPaused)}
+            onClick={togglePause}
             className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
               isPaused
                 ? "bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20"
@@ -229,7 +246,7 @@ export function LogsView({ events, agents }: LogsViewProps) {
             }`}
           >
             {isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
-            {isPaused ? "Resume" : "Pause"}
+            {isPaused ? "Resume Live" : "Pause Feed"}
           </button>
 
           {/* Clear / Restore View (non-destructive) */}
@@ -313,6 +330,37 @@ export function LogsView({ events, agents }: LogsViewProps) {
           ))}
         </div>
       </div>
+
+      {/* Paused Log Investigation Banner */}
+      {isPaused && (
+        <div className="mx-4 mt-2.5 flex items-center justify-between rounded-lg border border-amber-500/40 bg-amber-500/10 px-3.5 py-2 text-xs text-amber-200 shrink-0 font-mono">
+          <div className="flex items-center gap-2">
+            <Pause className="h-4 w-4 text-amber-400 shrink-0" />
+            <span>
+              <strong>Log feed paused for inspection.</strong>
+              {bufferedLogsCount > 0 && ` (${bufferedLogsCount} new log entries buffered in background)`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {bufferedLogsCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setPausedSnapshotIndex(allLogs.length)}
+                className="rounded bg-amber-500/20 border border-amber-500/30 px-2 py-1 text-amber-200 hover:bg-amber-500/30 transition-colors"
+              >
+                View Buffered ({bufferedLogsCount})
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={togglePause}
+              className="rounded bg-amber-400 px-2.5 py-1 text-black font-semibold hover:bg-amber-300 transition-colors"
+            >
+              Resume Live
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Log Output Stream */}
       <div

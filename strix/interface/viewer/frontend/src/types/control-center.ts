@@ -17,6 +17,90 @@ export interface RealtimeTelemetry {
   eventsPerSecond: number;
   bufferSize: number;
   isPaused: boolean;
+  errorCount?: number;
+}
+
+/** Official Session Statuses according to Gate UI-03 specification */
+export type OfficialSessionStatus =
+  | "running"
+  | "waiting"
+  | "budget_paused"
+  | "completed"
+  | "stopped";
+
+/** Semantic classification of a session state */
+export type SessionStateClassification =
+  | "active"
+  | "paused"
+  | "completed"
+  | "stopped"
+  | "error";
+
+export interface SessionInspectionDetails {
+  id: string;
+  status: OfficialSessionStatus;
+  classification: SessionStateClassification;
+  startTime: string | null;
+  lastActivity: string | null;
+  duration: string;
+  agentCount: number;
+  eventCount: number;
+  findingCount: number;
+  errorCount: number;
+  transportState: ConnectionState;
+  reconnectCount: number;
+  deduplicatedCount: number;
+  scanMode?: string | null;
+  target?: string | null;
+}
+
+/** Official Agent Statuses according to Gate UI-03 specification */
+export type OfficialAgentStatus =
+  | "RUNNING"
+  | "WAITING"
+  | "PAUSED"
+  | "COMPLETED"
+  | "STOPPED"
+  | "ERROR";
+
+export interface AgentInspectionDetails {
+  id: string;
+  name: string;
+  status: OfficialAgentStatus;
+  currentTask: string;
+  lastEvent: string;
+  lastActivity: string;
+  tool: string;
+  duration: string;
+  eventCount: number;
+  errorCount: number;
+  parentId: string | null;
+  childrenCount: number;
+}
+
+export interface OperationalMetrics {
+  eventsPerSecond: number | string;
+  totalEvents: number;
+  activeAgents: number;
+  totalAgents: number;
+  findingsCount: number;
+  errorsCount: number;
+  reconnectsCount: number;
+  sessionDuration: string;
+  transportState: ConnectionState;
+}
+
+export interface EventTimelineItem {
+  id: string;
+  type: string;
+  source: string;
+  timestamp: string;
+  session_id: string;
+  agent_id: string;
+  version: number;
+  payload: Record<string, unknown>;
+  severity?: string | null;
+  isNew?: boolean;
 }
 
 export type ControlCenterView =

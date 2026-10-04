@@ -51,6 +51,7 @@ import type { ControlCenterView } from "@/types/control-center";
 import { TopBar } from "@/components/control-center/TopBar";
 import { StatusBar } from "@/components/control-center/StatusBar";
 import { DashboardView } from "@/components/control-center/views/DashboardView";
+import { AgentsView } from "@/components/control-center/views/AgentsView";
 import { SessionsView } from "@/components/control-center/views/SessionsView";
 import { TargetsView } from "@/components/control-center/views/TargetsView";
 import { ScansView } from "@/components/control-center/views/ScansView";
@@ -89,6 +90,7 @@ export default function App() {
     bufferedCountWhilePaused,
     pauseFeed,
     resumeFeed,
+    viewQueuedEvents,
     triggerSync,
     resetBuffer,
   } = useRealtimeStream({
@@ -305,12 +307,13 @@ export default function App() {
                         error={error}
                       />
                     ) : view === "agents" ? (
-                      <AgentsTab run={run} canSteer={canSteer} />
+                      <AgentsView run={run} canSteer={canSteer} />
                     ) : view === "sessions" || view === "history" ? (
                       <SessionsView
                         currentRun={run}
                         activeRunName={activeRun}
                         runsPayload={runs}
+                        telemetry={telemetry}
                         onSelectRun={(name: string | null) => selectRun(name || "")}
                       />
                     ) : view === "targets" ? (
@@ -341,6 +344,7 @@ export default function App() {
                         bufferedCountWhilePaused={bufferedCountWhilePaused}
                         onPause={pauseFeed}
                         onResume={resumeFeed}
+                        onViewQueuedEvents={viewQueuedEvents}
                       />
                     ) : view === "findings" || view === "issues" ? (
                       selected ? (

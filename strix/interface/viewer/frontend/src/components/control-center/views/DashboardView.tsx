@@ -256,6 +256,86 @@ export function DashboardView({
         </div>
       </div>
 
+      {/* Connection & Transport Telemetry Panel (Gate UI-03) */}
+      <div className="rounded-xl border border-white/10 bg-zinc-950 p-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
+          <div className="flex items-center gap-2">
+            <Radio className="h-4 w-4 text-emerald-400" />
+            <h3 className="text-sm font-semibold text-white">Connection & Transport Telemetry</h3>
+            <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-mono text-emerald-300">
+              GATE UI-03 SPEC
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-mono">
+            <span className="text-zinc-500">Transport:</span>
+            <span className="text-cyan-300 font-semibold uppercase">{telemetry?.transportMode || "realtime"}</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 font-mono text-xs">
+          <div className="rounded-lg bg-zinc-900/60 p-3 border border-white/5">
+            <span className="text-zinc-500">Connection State</span>
+            <div className="mt-1 flex items-center gap-1.5 font-bold text-white">
+              <span
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  connState === "CONNECTED"
+                    ? "bg-emerald-400 animate-pulse"
+                    : connState === "CONNECTING"
+                    ? "bg-cyan-400 animate-ping"
+                    : connState === "RECONNECTING"
+                    ? "bg-amber-400 animate-bounce"
+                    : connState === "ERROR"
+                    ? "bg-rose-500"
+                    : "bg-zinc-500"
+                )}
+              />
+              <span>{connState}</span>
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-zinc-900/60 p-3 border border-white/5">
+            <span className="text-zinc-500">Last Sync</span>
+            <div className="mt-1 text-zinc-200 font-semibold">
+              {telemetry?.lastHeartbeat ? new Date(telemetry.lastHeartbeat).toLocaleTimeString() : "N/A"}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-zinc-900/60 p-3 border border-white/5">
+            <span className="text-zinc-500">Reconnect Count</span>
+            <div className="mt-1 text-zinc-200 font-semibold">
+              {telemetry?.reconnectAttempts ?? 0}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-zinc-900/60 p-3 border border-white/5">
+            <span className="text-zinc-500">Events Received</span>
+            <div className="mt-1 text-white font-semibold">
+              {telemetry?.totalEventsReceived ?? eventCount}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-zinc-900/60 p-3 border border-white/5">
+            <span className="text-zinc-500">Deduplicated</span>
+            <div className="mt-1 text-cyan-300 font-semibold">
+              {telemetry?.deduplicatedCount ?? 0}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-zinc-900/60 p-3 border border-white/5">
+            <span className="text-zinc-500">System Errors</span>
+            <div
+              className={cn(
+                "mt-1 font-semibold",
+                (telemetry?.errorCount ?? 0) > 0 ? "text-rose-400" : "text-emerald-400"
+              )}
+            >
+              {telemetry?.errorCount ?? 0} errors
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Main Grid: Target Details & Recent Events */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left 2 Cols: Target Scope & Findings Summary */}
