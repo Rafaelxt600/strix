@@ -14,6 +14,7 @@ import {
   Wrench,
   Radio,
   FileText,
+  FileCode,
   Settings,
 } from "lucide-react";
 import { LuGitPullRequestArrow } from "react-icons/lu";
@@ -287,6 +288,12 @@ export default function Sidebar({
               count={issuesCount > 0 ? issuesCount : undefined}
               active={view === "findings" || view === "issues"}
               onClick={() => onSelectView("findings")}
+            />
+            <NavItem
+              icon={<FileCode className="h-4 w-4" />}
+              label="Reports"
+              active={view === "reports"}
+              onClick={() => onSelectView("reports")}
             />
             <NavItem
               icon={<FileText className="h-4 w-4" />}

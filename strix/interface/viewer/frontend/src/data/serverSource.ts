@@ -1,4 +1,5 @@
 import type { Vulnerability } from "@/types/issues";
+import type { ReportMetadata, ReportFileDetail } from "@/types/control-center";
 import {
   parseRunJson,
   parseVulnerabilitiesJson,
@@ -327,4 +328,28 @@ export async function sendReport(runName?: string | null): Promise<SendReportRes
     };
   }
   return { ok: false, error: String(data.error ?? "unavailable") };
+}
+
+export async function fetchReports(runName?: string | null): Promise<ReportMetadata[]> {
+  try {
+    const data = (await getJson(`/api/reports${runQuery(runName)}`)) as { reports?: ReportMetadata[] };
+    return Array.isArray(data?.reports) ? data.reports : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchReportContent(
+  filename: string,
+  runName?: string | null
+): Promise<ReportFileDetail | null> {
+  try {
+    const q = runName ? `&run=${encodeURIComponent(runName)}` : "";
+    const data = (await getJson(
+      `/api/report/content?file=${encodeURIComponent(filename)}${q}`
+    )) as ReportFileDetail;
+    return data;
+  } catch {
+    return null;
+  }
 }

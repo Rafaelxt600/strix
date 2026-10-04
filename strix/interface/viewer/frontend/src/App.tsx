@@ -58,6 +58,7 @@ import { ScansView } from "@/components/control-center/views/ScansView";
 import { ToolsView } from "@/components/control-center/views/ToolsView";
 import { EventsView } from "@/components/control-center/views/EventsView";
 import { FindingsView } from "@/components/control-center/views/FindingsView";
+import { ReportsView } from "@/components/control-center/views/ReportsView";
 import { LogsView } from "@/components/control-center/views/LogsView";
 import { SettingsView } from "@/components/control-center/views/SettingsView";
 
@@ -359,24 +360,27 @@ export default function App() {
                         onViewQueuedEvents={viewQueuedEvents}
                       />
                     ) : view === "findings" || view === "issues" ? (
-                      selected ? (
-                        <div className="space-y-4">
-                          <button
-                            onClick={() => setSelectedId(null)}
-                            className="cursor-pointer inline-flex items-center gap-1.5 text-sm text-[#888] hover:text-white transition-colors"
-                          >
-                            <ArrowLeft className="w-4 h-4" /> Back to all findings
-                          </button>
-                          <VulnerabilityDetail vulnerability={selected} />
-                        </div>
-                      ) : (
-                        <FindingsView
-                          vulnerabilities={run.vulnerabilities}
-                          finished={run.finished}
-                          selectedFindingId={selectedId}
-                          onSelectFinding={(id: string | null) => setSelectedId(id)}
-                        />
-                      )
+                      <FindingsView
+                        vulnerabilities={run.vulnerabilities}
+                        finished={run.finished}
+                        selectedFindingId={selectedId}
+                        onSelectFinding={(id: string | null) => setSelectedId(id)}
+                        events={run.transcript.events}
+                        agents={run.transcript.agents}
+                        onSelectAgent={(_agId) => userSetView("agents")}
+                        onSelectTarget={(_tgt) => userSetView("targets")}
+                        onSelectTool={(_tl) => userSetView("tools")}
+                        onSelectView={userSetView}
+                      />
+                    ) : view === "reports" ? (
+                      <ReportsView
+                        run={run}
+                        activeRunName={activeRun}
+                        onSelectFinding={(id: string) => {
+                          setSelectedId(id);
+                          userSetView("findings");
+                        }}
+                      />
                     ) : view === "logs" ? (
                       <LogsView
                         events={run.transcript.events}

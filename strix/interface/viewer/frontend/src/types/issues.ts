@@ -1,4 +1,4 @@
-export type VulnerabilitySeverity = "critical" | "high" | "medium" | "low";
+export type VulnerabilitySeverity = "critical" | "high" | "medium" | "low" | "info";
 export type VulnerabilityStatus = "open" | "in_progress" | "snoozed" | "fixed" | "ignored";
 export type FixEffort = "trivial" | "low" | "medium" | "high";
 
@@ -141,6 +141,18 @@ export interface Vulnerability {
   fix_pr_eligible?: boolean;
   fix_pr_reason?: string | null;
   fix_pr_url?: string | null;
+  confidence?: string | null;
+  confidence_rationale?: string | null;
+  counterevidence?: string | null;
+  severity_change_conditions?: string | null;
+  agent_id?: string | null;
+  tool?: string | null;
+  evidence_count?: number | null;
+  request?: Record<string, unknown> | null;
+  response?: Record<string, unknown> | null;
+  timestamp?: string | null;
+  execution_mode?: string | null;
+  runtime?: string | null;
 }
 
 export interface VulnerabilityFilters {
@@ -172,6 +184,7 @@ export const SEVERITY_COLORS: Record<VulnerabilitySeverity, string> = {
   high: "bg-orange-500/20 text-orange-500 border-orange-500/30",
   medium: "bg-yellow-500/20 text-yellow-500 border-yellow-500/30",
   low: "bg-blue-500/20 text-blue-500 border-blue-500/30",
+  info: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
 };
 
 export const STATUS_COLORS: Record<VulnerabilityStatus, string> = {

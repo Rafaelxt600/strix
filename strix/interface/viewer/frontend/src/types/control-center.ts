@@ -160,6 +160,7 @@ export type ControlCenterView =
   | "tools"
   | "events"
   | "findings"
+  | "reports"
   | "logs"
   | "settings"
   // Backward compatibility views
@@ -284,3 +285,112 @@ export const STRIX_CATALOG_TOOLS: StrixToolInfo[] = [
     status: "ready",
   },
 ];
+
+/**
+ * Gate UI-05 Types: Evidence Explorer, Findings Intelligence & Report Center
+ */
+
+export type OfficialFindingStatus =
+  | "OPEN"
+  | "CONFIRMED"
+  | "DISMISSED"
+  | "FIXED"
+  | "UNKNOWN";
+
+export type OfficialFindingSeverity =
+  | "CRITICAL"
+  | "HIGH"
+  | "MEDIUM"
+  | "LOW"
+  | "INFO";
+
+export type EvidenceCategory =
+  | "http_request"
+  | "http_response"
+  | "url"
+  | "header"
+  | "payload"
+  | "screenshot"
+  | "tool_output"
+  | "console"
+  | "agent_message"
+  | "event"
+  | "artifact"
+  | "file";
+
+export interface HttpRequestEvidence {
+  method: string;
+  url: string;
+  headers?: Record<string, string>;
+  parameters?: Record<string, string>;
+  body?: string;
+}
+
+export interface HttpResponseEvidence {
+  statusCode: number;
+  statusText?: string;
+  headers?: Record<string, string>;
+  body?: string;
+}
+
+export interface EvidenceItem {
+  id: string;
+  type: EvidenceCategory;
+  title: string;
+  timestamp: string;
+  source: string;
+  agent?: string | null;
+  tool?: string | null;
+  target?: string | null;
+  content: string;
+  request?: HttpRequestEvidence | null;
+  response?: HttpResponseEvidence | null;
+  raw?: Record<string, unknown> | null;
+}
+
+export interface FindingTimelineEvent {
+  id: string;
+  timestamp: string;
+  type:
+    | "agent_started"
+    | "target_discovered"
+    | "tool_executed"
+    | "response_received"
+    | "finding_created"
+    | "evidence_attached"
+    | "state_changed";
+  title: string;
+  description: string;
+  source: string;
+  agentId?: string | null;
+  toolName?: string | null;
+  severity?: string | null;
+}
+
+export interface ReportMetadata {
+  name: string;
+  path: string;
+  title: string;
+  format: "markdown" | "sarif" | "json" | "csv" | "text";
+  size_bytes: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SarifSummary {
+  runs_count: number;
+  results_count: number;
+  rules_count: number;
+  severity_counts: Record<string, number>;
+  version: string;
+}
+
+export interface ReportFileDetail extends ReportMetadata {
+  content?: string;
+  data?: unknown;
+  raw?: string;
+  summary?: SarifSummary;
+  error?: string;
+  message?: string;
+}
+

@@ -30,7 +30,9 @@ from strix.core.paths import run_record_path
 from strix.interface.viewer import auth
 from strix.interface.viewer.transcript import (
     build_run_state,
+    list_run_reports,
     primary_target,
+    read_report_file,
     read_report_markdown,
     read_run_summary,
     read_vulnerabilities,
@@ -291,16 +293,41 @@ def _make_handler(state: _ViewerState) -> type[BaseHTTPRequestHandler]:
                 self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "unverified"})
                 return
 
+            self._handle_run_data_api(path, query, run_dir)
+
+        def _handle_run_data_api(
+            self, path: str, query: dict[str, list[str]], run_dir: Path
+        ) -> None:
             if path == "/api/run":
                 self._send_json(HTTPStatus.OK, read_run_summary(run_dir))
             elif path == "/api/vulnerabilities":
                 self._send_json(HTTPStatus.OK, read_vulnerabilities(run_dir))
             elif path == "/api/report":
                 self._send_json(HTTPStatus.OK, {"markdown": read_report_markdown(run_dir)})
+            elif path == "/api/reports":
+                self._send_json(HTTPStatus.OK, {"reports": list_run_reports(run_dir)})
+            elif path == "/api/report/content":
+                self._handle_report_content(query, run_dir)
             elif path == "/api/transcript":
                 self._send_json(HTTPStatus.OK, build_run_state(run_dir))
             else:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "unknown endpoint"})
+
+        def _handle_report_content(self, query: dict[str, list[str]], run_dir: Path) -> None:
+            file_param = query.get("file", [""])[0]
+            if not file_param:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "missing_file_param"})
+                return
+            report_data = read_report_file(run_dir, file_param)
+            if "error" in report_data:
+                status_code = (
+                    HTTPStatus.NOT_FOUND
+                    if report_data["error"] == "not_found"
+                    else HTTPStatus.BAD_REQUEST
+                )
+                self._send_json(status_code, report_data)
+            else:
+                self._send_json(HTTPStatus.OK, report_data)
 
         def _handle_auth_status(self) -> None:
             # The cached verified email is only disclosed to a caller holding this
