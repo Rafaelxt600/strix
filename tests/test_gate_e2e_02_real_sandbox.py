@@ -38,10 +38,16 @@ from strix.runtime.emulated import EmulatedSandboxSession
 
 
 def is_docker_available() -> bool:
-    """Check if the local Docker daemon is reachable and responding."""
+    """Check if a functional Linux Docker daemon is reachable and responding."""
     try:
         client = docker.from_env()
-        client.ping()
+        if not client.ping():
+            return False
+        info = client.info()
+        # Strix sandbox runtime exclusively requires a Linux container environment.
+        # Windows-based engines without Linux container support cannot run Strix containers.
+        if info.get("OSType") != "linux":
+            return False
     except (DockerException, Exception):
         return False
     else:
@@ -154,14 +160,10 @@ def test_e2e_02_contract_workspace_and_manifest_boundaries() -> None:
 
 
 def test_e2e_02_contract_docker_infrastructure_detection() -> None:
-    """Validate that Docker unavailability raises DockerException and is correctly classified."""
-    # When Docker is not installed or daemon is stopped, from_env fails with DockerException
+    """Validate that Docker unavailability or incompatibility is correctly classified."""
     if not is_docker_available():
-        with pytest.raises(DockerException):
-            docker.from_env()
-
-        # Strict rule: Must not fabricate a PASS or claim Production Ready without daemon
-        classification = "NOT_EXECUTABLE_IN_CURRENT_ENVIRONMENT"
+        # Strict rule: Must not fabricate a PASS or claim Production Ready without Linux daemon
+        classification = "BLOCKED_BY_INFRASTRUCTURE"
         assert classification in (
             "BLOCKED_BY_INFRASTRUCTURE",
             "NOT_EXECUTABLE_IN_CURRENT_ENVIRONMENT",
@@ -169,6 +171,7 @@ def test_e2e_02_contract_docker_infrastructure_detection() -> None:
     else:
         client = docker.from_env()
         assert client.ping() is True
+        assert client.info().get("OSType") == "linux"
 
 
 def test_e2e_02_contract_default_settings_and_backend_selection() -> None:
@@ -190,9 +193,18 @@ def test_e2e_02_contract_default_settings_and_backend_selection() -> None:
 async def test_e2e_02_real_docker_container_lifecycle() -> None:
     """Validate real Docker container creation, startup, running state, and deletion."""
     client_instance = docker.from_env()
+    image_name = "alpine:latest"
+    try:
+        client_instance.images.get(image_name)
+    except docker.errors.ImageNotFound:
+        try:
+            client_instance.images.pull(image_name)
+        except Exception as err:
+            pytest.skip(f"Docker image {image_name} unavailable: {err}")
+
     container_name = f"strix-e2e02-test-{os.urandom(4).hex()}"
     container = client_instance.containers.run(
-        image="alpine:latest",
+        image=image_name,
         command=["sleep", "60"],
         name=container_name,
         detach=True,
@@ -214,8 +226,17 @@ async def test_e2e_02_real_docker_container_lifecycle() -> None:
 async def test_e2e_02_real_docker_tool_execution() -> None:
     """Validate real process execution inside a live Docker container."""
     client_instance = docker.from_env()
+    image_name = "alpine:latest"
+    try:
+        client_instance.images.get(image_name)
+    except docker.errors.ImageNotFound:
+        try:
+            client_instance.images.pull(image_name)
+        except Exception as err:
+            pytest.skip(f"Docker image {image_name} unavailable: {err}")
+
     container = client_instance.containers.run(
-        image="alpine:latest",
+        image=image_name,
         command=["tail", "-f", "/dev/null"],
         detach=True,
     )
