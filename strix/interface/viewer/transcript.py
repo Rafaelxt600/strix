@@ -248,6 +248,273 @@ def read_report_file(run_dir: Path, rel_path: str) -> dict[str, Any]:
     return _read_text_or_json(target, meta, fmt)
 
 
+def _compute_duration(start_str: str | None, end_str: str | None) -> int | None:
+    if not start_str or not end_str:
+        return None
+    try:
+        t0 = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+        t1 = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
+        sec = int((t1 - t0).total_seconds())
+    except (ValueError, TypeError):
+        return None
+    else:
+        return None if sec < 0 else sec
+
+
+def extract_all_targets(record: dict[str, Any]) -> list[str]:
+    """Extract all unique targets listed in a run record."""
+    results: list[str] = []
+    for key in ("targets_info", "targets"):
+        items = record.get(key)
+        if isinstance(items, list):
+            for entry in items:
+                if isinstance(entry, str) and entry.strip() and entry.strip() not in results:
+                    results.append(entry.strip())
+                elif isinstance(entry, dict):
+                    val = (
+                        entry.get("original")
+                        or entry.get("target")
+                        or entry.get("url")
+                        or entry.get("domain")
+                        or entry.get("host")
+                        or entry.get("name")
+                    )
+                    if isinstance(val, str) and val.strip() and val.strip() not in results:
+                        results.append(val.strip())
+
+    tgt = record.get("target")
+    if isinstance(tgt, str) and tgt.strip() and tgt.strip() not in results:
+        results.append(tgt.strip())
+    pri = primary_target(record)
+    if pri and pri not in results:
+        results.append(pri)
+    return results
+
+
+def _extract_agent_names(data: Any) -> list[str]:
+    names: list[str] = []
+    if isinstance(data, dict):
+        names_dict = data.get("names", {})
+        if isinstance(names_dict, dict):
+            names.extend(str(n) for n in names_dict.values() if n)
+        agents_list = data.get("agents", [])
+        if isinstance(agents_list, list):
+            for a in agents_list:
+                val = a.get("name") if isinstance(a, dict) else a
+                if isinstance(val, str) and val.strip():
+                    names.append(val.strip())
+    elif isinstance(data, list):
+        for a in data:
+            val = a.get("name") if isinstance(a, dict) else a
+            if isinstance(val, str) and val.strip():
+                names.append(val.strip())
+    return names
+
+
+def _read_agents_summary(run_dir: Path) -> tuple[int, list[str]]:
+    agents_path = run_dir / ".state" / "agents.json"
+    if not agents_path.is_file():
+        return 0, []
+    data = _load_json(agents_path, default={})
+    names = _extract_agent_names(data)
+    if names:
+        deduped = sorted(set(names))
+        return len(deduped), deduped
+    if isinstance(data, dict):
+        statuses_dict = data.get("statuses", {})
+        if isinstance(statuses_dict, dict):
+            return len(statuses_dict), []
+    return 0, []
+
+
+def parse_run_archive_entry(run_dir: Path) -> dict[str, Any]:
+    """Parse complete metadata of a run for the session archive, handling corrupt/partial runs."""
+    rec_file = run_record_path(run_dir)
+    is_incomplete = not rec_file.is_file()
+    is_corrupt = False
+    record: dict[str, Any] = {}
+
+    if not is_incomplete:
+        try:
+            parsed = json.loads(rec_file.read_text(encoding="utf-8"))
+            if isinstance(parsed, dict):
+                record = parsed
+            else:
+                is_corrupt = True
+        except (OSError, json.JSONDecodeError):
+            is_corrupt = True
+
+    start_time = record.get("start_time")
+    end_time = record.get("end_time")
+    duration_seconds = _compute_duration(start_time, end_time)
+
+    vulns = read_vulnerabilities(run_dir)
+    sev_counts = severity_counts(vulns)
+    reports = list_run_reports(run_dir)
+    agents_count, agent_names = _read_agents_summary(run_dir)
+    targets = extract_all_targets(record)
+    target_pri = primary_target(record) or (targets[0] if targets else None)
+
+    if is_corrupt:
+        status = "corrupted"
+    elif is_incomplete:
+        status = "incomplete"
+    else:
+        status = str(record.get("status") or "unknown").lower()
+
+    finished = status in _TERMINAL_STATUSES and bool(end_time)
+
+    return {
+        "name": record.get("run_name") or run_dir.name,
+        "target": target_pri,
+        "targets": targets,
+        "scan_mode": record.get("scan_mode"),
+        "status": status,
+        "start_time": start_time,
+        "end_time": end_time,
+        "duration_seconds": duration_seconds,
+        "finished": finished,
+        "severity_counts": sev_counts,
+        "findings_count": len(vulns),
+        "reports_count": len(reports),
+        "agents_count": agents_count,
+        "agent_names": agent_names,
+        "is_corrupt": is_corrupt,
+        "is_incomplete": is_incomplete,
+    }
+
+
+def _match_session(q: str, session_name: str, entry: dict[str, Any]) -> list[dict[str, Any]]:
+    if q in session_name.lower():
+        return [{
+            "type": "SESSION",
+            "session": session_name,
+            "entity": session_name,
+            "title": f"Session: {session_name}",
+            "timestamp": entry.get("start_time"),
+            "severity": None,
+            "target": entry.get("target"),
+            "source": "run.json",
+        }]
+    return []
+
+
+def _match_targets(q: str, session_name: str, entry: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "TARGET",
+            "session": session_name,
+            "entity": tgt,
+            "title": f"Target: {tgt}",
+            "timestamp": entry.get("start_time"),
+            "severity": None,
+            "target": tgt,
+            "source": "targets_info",
+        }
+        for tgt in entry.get("targets", [])
+        if q in tgt.lower()
+    ]
+
+
+def _match_findings(
+    q: str, run_dir: Path, session_name: str, entry: dict[str, Any]
+) -> list[dict[str, Any]]:
+    hits: list[dict[str, Any]] = []
+    for vuln in read_vulnerabilities(run_dir):
+        if not isinstance(vuln, dict):
+            continue
+        v_id = str(vuln.get("id") or "")
+        v_title = str(vuln.get("title") or "")
+        v_desc = str(vuln.get("description") or "")
+        v_sev = str(vuln.get("severity") or "low").lower()
+        v_tgt = str(vuln.get("target") or entry.get("target") or "")
+        if q in v_id.lower() or q in v_title.lower() or q in v_desc.lower():
+            hits.append({
+                "type": "FINDING",
+                "session": session_name,
+                "entity": v_id or v_title,
+                "title": v_title or v_id,
+                "timestamp": vuln.get("timestamp") or entry.get("start_time"),
+                "severity": v_sev,
+                "target": v_tgt or None,
+                "source": "vulnerabilities.json",
+            })
+    return hits
+
+
+def _match_reports(
+    q: str, run_dir: Path, session_name: str, entry: dict[str, Any]
+) -> list[dict[str, Any]]:
+    hits: list[dict[str, Any]] = []
+    for rep in list_run_reports(run_dir):
+        r_name = str(rep.get("name") or "")
+        r_title = str(rep.get("title") or "")
+        if q in r_name.lower() or q in r_title.lower():
+            hits.append({
+                "type": "REPORT",
+                "session": session_name,
+                "entity": rep.get("path") or r_name,
+                "title": r_title or r_name,
+                "timestamp": rep.get("updated_at") or entry.get("start_time"),
+                "severity": None,
+                "target": entry.get("target"),
+                "source": r_name,
+            })
+    return hits
+
+
+def _match_agents(q: str, session_name: str, entry: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "AGENT",
+            "session": session_name,
+            "entity": a_name,
+            "title": f"Agent: {a_name}",
+            "timestamp": entry.get("start_time"),
+            "severity": None,
+            "target": entry.get("target"),
+            "source": "agents.json",
+        }
+        for a_name in entry.get("agent_names", [])
+        if q in a_name.lower()
+    ]
+
+
+def search_cross_runs(
+    base_dir: Path,
+    query_str: str,
+    *,
+    runs_filter: list[Path] | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Search cross-run sessions, findings, targets, agents, tools, and reports."""
+    q = query_str.lower().strip()
+    if not q:
+        return []
+
+    results: list[dict[str, Any]] = []
+    run_dirs: list[Path] = []
+    if runs_filter is not None:
+        run_dirs = runs_filter
+    elif base_dir.is_dir():
+        run_dirs = [c for c in base_dir.iterdir() if c.is_dir()]
+
+    for run_dir in run_dirs:
+        entry = parse_run_archive_entry(run_dir)
+        session_name = str(entry.get("name") or run_dir.name)
+
+        results.extend(_match_session(q, session_name, entry))
+        results.extend(_match_targets(q, session_name, entry))
+        results.extend(_match_findings(q, run_dir, session_name, entry))
+        results.extend(_match_reports(q, run_dir, session_name, entry))
+        results.extend(_match_agents(q, session_name, entry))
+
+        if len(results) >= limit:
+            break
+
+    return results[:limit]
+
+
 def _load_json(path: Path, *, default: Any) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -257,11 +524,14 @@ def _load_json(path: Path, *, default: Any) -> Any:
 
 __all__ = [
     "build_run_state",
+    "extract_all_targets",
     "list_run_reports",
+    "parse_run_archive_entry",
     "primary_target",
     "read_report_file",
     "read_report_markdown",
     "read_run_summary",
     "read_vulnerabilities",
+    "search_cross_runs",
     "severity_counts",
 ]

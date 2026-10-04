@@ -394,3 +394,133 @@ export interface ReportFileDetail extends ReportMetadata {
   message?: string;
 }
 
+// ---------------------------------------------------------------------------
+// GATE UI-06: GLOBAL INVESTIGATION, SESSION ARCHIVE & CROSS-RUN INTELLIGENCE
+// ---------------------------------------------------------------------------
+
+export interface HistoricalRunSummary {
+  name: string;
+  target: string | null;
+  targets: string[];
+  scan_mode: string | null;
+  status: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  duration_seconds: number | null;
+  finished: boolean;
+  severity_counts: Record<string, number>;
+  findings_count: number;
+  reports_count: number;
+  agents_count: number;
+  agent_names: string[];
+  is_corrupt: boolean;
+  is_incomplete: boolean;
+}
+
+export type SearchEntityType =
+  | "SESSION"
+  | "FINDING"
+  | "EVENT"
+  | "AGENT"
+  | "TARGET"
+  | "REPORT"
+  | "EVIDENCE"
+  | "TOOL";
+
+export interface GlobalSearchResult {
+  type: SearchEntityType;
+  session: string;
+  entity: string;
+  title: string;
+  timestamp?: string | null;
+  severity?: string | null;
+  target?: string | null;
+  source?: string | null;
+}
+
+export interface FindingComparisonItem {
+  id: string;
+  title: string;
+  severity: string;
+  target?: string | null;
+  sessions: string[];
+  firstSeen: string;
+  lastSeen: string;
+  status: "NEW" | "RECURRING" | "RESOLVED" | "REOPENED" | "UNKNOWN";
+}
+
+export interface FindingSeverityChange {
+  id: string;
+  title: string;
+  oldSeverity: string;
+  newSeverity: string;
+  fromSession: string;
+  toSession: string;
+}
+
+export interface CrossRunComparison {
+  runs: HistoricalRunSummary[];
+  durationDiffs: Record<string, number | null>;
+  findingsDiffs: Record<string, number>;
+  criticalDiffs: Record<string, number>;
+  sameFindings: FindingComparisonItem[];
+  newFindings: FindingComparisonItem[];
+  resolvedFindings: FindingComparisonItem[];
+  reopenedFindings: FindingComparisonItem[];
+  severityChanges: FindingSeverityChange[];
+  targetsDiff: {
+    same: string[];
+    added: string[];
+    removed: string[];
+  };
+}
+
+export interface HistoricalFindingRecord {
+  id: string;
+  title: string;
+  firstSeenSession: string;
+  lastSeenSession: string;
+  firstSeenTimestamp?: string | null;
+  lastSeenTimestamp?: string | null;
+  occurrences: number;
+  sessions: string[];
+  severityHistory: { session: string; severity: string; timestamp?: string }[];
+  statusHistory: { session: string; status: string; timestamp?: string }[];
+  lifecycle: "NEW" | "RECURRING" | "RESOLVED" | "REOPENED" | "UNKNOWN";
+}
+
+export interface HistoricalTargetRecord {
+  target: string;
+  sessions: string[];
+  firstSeen?: string | null;
+  lastSeen?: string | null;
+  totalFindings: number;
+  severityCounts: Record<string, number>;
+}
+
+export interface HistoricalToolRecord {
+  tool: string;
+  sessions: string[];
+  findingsDetected: number;
+}
+
+export interface HistoricalAgentRecord {
+  agent: string;
+  sessions: string[];
+  firstSeen?: string | null;
+  lastSeen?: string | null;
+}
+
+export interface GlobalMetrics {
+  totalRuns: number;
+  completedRuns: number;
+  runningRuns: number;
+  stoppedRuns: number;
+  errorRuns: number;
+  totalFindings: number;
+  criticalFindings: number;
+  uniqueTargets: number;
+  uniqueAgents: number;
+  totalReports: number;
+}
+

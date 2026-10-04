@@ -31,12 +31,13 @@ from strix.interface.viewer import auth
 from strix.interface.viewer.transcript import (
     build_run_state,
     list_run_reports,
+    parse_run_archive_entry,
     primary_target,
     read_report_file,
     read_report_markdown,
     read_run_summary,
     read_vulnerabilities,
-    severity_counts,
+    search_cross_runs,
 )
 
 
@@ -57,27 +58,30 @@ def bundle_is_built() -> bool:
 
 
 def _iter_run_dirs(base_dir: Path) -> list[Path]:
-    """Every run directory under ``base_dir``, newest first by record mtime."""
+    """Every run directory under ``base_dir``, newest first by record or dir mtime."""
     if not base_dir.is_dir():
         return []
-    run_dirs = [child for child in base_dir.iterdir() if run_record_path(child).is_file()]
-    run_dirs.sort(key=lambda child: run_record_path(child).stat().st_mtime, reverse=True)
+    run_dirs: list[Path] = [child for child in base_dir.iterdir() if child.is_dir()]
+
+    def _sort_key(child: Path) -> float:
+        rec = run_record_path(child)
+        if rec.is_file():
+            try:
+                return rec.stat().st_mtime
+            except OSError:
+                pass
+        try:
+            return child.stat().st_mtime
+        except OSError:
+            return 0.0
+
+    run_dirs.sort(key=_sort_key, reverse=True)
     return run_dirs
 
 
 def run_list_entry(run_dir: Path) -> dict[str, Any]:
-    """Compact summary of a single run for the history list."""
-    record = read_run_summary(run_dir)
-    return {
-        "name": record.get("run_name") or run_dir.name,
-        "target": primary_target(record),
-        "scan_mode": record.get("scan_mode"),
-        "status": record.get("status"),
-        "start_time": record.get("start_time"),
-        "end_time": record.get("end_time"),
-        "finished": bool(record.get("finished")),
-        "severity_counts": severity_counts(read_vulnerabilities(run_dir)),
-    }
+    """Compact summary of a single run for the history list and session archive."""
+    return parse_run_archive_entry(run_dir)
 
 
 def build_runs_payload(base_dir: Path, *, verified: bool) -> dict[str, Any]:
@@ -103,8 +107,8 @@ def resolve_run_dir(base_dir: Path, run_param: str | None, default_run_dir: Path
         return default_run_dir
     base = base_dir.resolve()
     candidate = (base / run_param).resolve()
-    # Only direct children of the runs base that actually hold a run record.
-    if candidate.parent != base or not run_record_path(candidate).is_file():
+    # Direct child directory of base_dir.
+    if candidate.parent != base or not candidate.is_dir():
         return None
     return candidate
 
@@ -243,20 +247,16 @@ def _make_handler(state: _ViewerState) -> type[BaseHTTPRequestHandler]:
             self.send_response(HTTPStatus.NO_CONTENT)
             self.end_headers()
 
-        def _handle_api(self, path: str, query: dict[str, list[str]]) -> None:
-            # The cross-run history list (/api/runs) unlocks its entries only for
-            # a caller that holds this process's session capability *and* is
-            # email verified, so merely reaching an exposed --host port never
-            # leaks the run list (the payload still advertises the count as a
-            # teaser).
+        def _handle_unscoped_api(self, path: str, query: dict[str, list[str]]) -> bool:
             if path == "/api/runs":
                 unlocked = self._has_session() and auth.is_verified()
                 payload = build_runs_payload(state.base_dir, verified=unlocked)
                 self._send_json(HTTPStatus.OK, payload)
-                return
+                return True
+            if path == "/api/runs/search":
+                self._handle_runs_search(query)
+                return True
             if path == "/api/capabilities":
-                # Steering and operational control are possible when the viewer shares
-                # a live scan's coordinator + event loop or a control handler is wired.
                 self._send_json(
                     HTTPStatus.OK,
                     {
@@ -267,9 +267,14 @@ def _make_handler(state: _ViewerState) -> type[BaseHTTPRequestHandler]:
                         else [],
                     },
                 )
-                return
+                return True
             if path == "/api/auth/status":
                 self._handle_auth_status()
+                return True
+            return False
+
+        def _handle_api(self, path: str, query: dict[str, list[str]]) -> None:
+            if self._handle_unscoped_api(path, query):
                 return
 
             # All remaining GET endpoints expose run metadata or scan output.
@@ -328,6 +333,21 @@ def _make_handler(state: _ViewerState) -> type[BaseHTTPRequestHandler]:
                 self._send_json(status_code, report_data)
             else:
                 self._send_json(HTTPStatus.OK, report_data)
+
+        def _handle_runs_search(self, query: dict[str, list[str]]) -> None:
+            if not self._has_session():
+                self._send_json(HTTPStatus.FORBIDDEN, {"error": "forbidden"})
+                return
+            query_param = query.get("q", [""])[0]
+            limit_val = query.get("limit", ["50"])[0]
+            limit = int(limit_val) if limit_val.isdigit() else 50
+            # If verified, search across all runs under base_dir.
+            # If unverified, search only within current run_dir to respect history gating.
+            runs_filter = None if auth.is_verified() else [state.run_dir]
+            results = search_cross_runs(
+                state.base_dir, query_param, runs_filter=runs_filter, limit=limit
+            )
+            self._send_json(HTTPStatus.OK, {"query": query_param, "results": results})
 
         def _handle_auth_status(self) -> None:
             # The cached verified email is only disclosed to a caller holding this

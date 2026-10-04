@@ -1,5 +1,9 @@
 import type { Vulnerability } from "@/types/issues";
-import type { ReportMetadata, ReportFileDetail } from "@/types/control-center";
+import type {
+  ReportMetadata,
+  ReportFileDetail,
+  GlobalSearchResult,
+} from "@/types/control-center";
 import {
   parseRunJson,
   parseVulnerabilitiesJson,
@@ -156,12 +160,20 @@ export interface RunSeverityCounts {
 export interface RunListEntry {
   name: string;
   target: string | null;
+  targets?: string[];
   scan_mode: string | null;
   status: string | null;
   start_time: string | null;
   end_time: string | null;
+  duration_seconds?: number | null;
   finished: boolean;
   severity_counts: RunSeverityCounts;
+  findings_count?: number;
+  reports_count?: number;
+  agents_count?: number;
+  agent_names?: string[];
+  is_corrupt?: boolean;
+  is_incomplete?: boolean;
 }
 
 export interface RunsPayload {
@@ -351,5 +363,31 @@ export async function fetchReportContent(
     return data;
   } catch {
     return null;
+  }
+}
+
+export async function fetchRunsSearch(
+  query: string,
+  limit: number = 50
+): Promise<GlobalSearchResult[]> {
+  if (!query || !query.trim()) return [];
+  try {
+    const q = encodeURIComponent(query.trim());
+    const data = (await getJson(`/api/runs/search?q=${q}&limit=${limit}`)) as {
+      results?: GlobalSearchResult[];
+    };
+    return Array.isArray(data?.results) ? data.results : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchRunVulnerabilities(
+  runName?: string | null
+): Promise<Vulnerability[]> {
+  try {
+    return await fetchVulnerabilities(null, runName);
+  } catch {
+    return [];
   }
 }
