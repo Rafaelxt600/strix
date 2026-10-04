@@ -103,6 +103,54 @@ export interface EventTimelineItem {
   isNew?: boolean;
 }
 
+/** Operational Command types for Gate UI-04 */
+export type RunControlCommand = "pause" | "resume" | "stop" | "cancel";
+
+export interface AuditCommandEntry {
+  id: string;
+  timestamp: string;
+  command: "PAUSE" | "RESUME" | "STOP" | "CANCEL" | "STEER";
+  runId: string;
+  runName: string;
+  operatorContext: string;
+  status: "pending" | "accepted" | "rejected" | "failed";
+  previousState: OfficialSessionStatus;
+  newState?: OfficialSessionStatus;
+  details?: string;
+  error?: string;
+  statusCode?: number;
+}
+
+export type OperationalTimelineCategory =
+  | "ALL"
+  | "COMMANDS"
+  | "STATE"
+  | "EVENTS"
+  | "ERRORS"
+  | "FINDINGS";
+
+export interface OperationalTimelineItem {
+  id: string;
+  timestamp: string;
+  category: "COMMANDS" | "STATE" | "EVENTS" | "ERRORS" | "FINDINGS";
+  title: string;
+  description: string;
+  badge?: string;
+  severity?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface DestructiveConfirmationConfig {
+  isOpen: boolean;
+  operation: "STOP" | "CANCEL" | "TERMINATE";
+  runId: string;
+  runName: string;
+  currentStatus: string;
+  consequences: string;
+  onConfirm: () => Promise<void>;
+  onCancel: () => void;
+}
+
 export type ControlCenterView =
   | "dashboard"
   | "agents"

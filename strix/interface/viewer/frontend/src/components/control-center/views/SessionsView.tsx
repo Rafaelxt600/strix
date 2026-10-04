@@ -30,6 +30,7 @@ import {
 import type { LoadedRun, RunListEntry, RunsPayload } from "@/data/serverSource";
 import type {
   ConnectionState,
+  ControlCenterView,
   OfficialSessionStatus,
   RealtimeTelemetry,
   SessionInspectionDetails,
@@ -43,6 +44,7 @@ interface SessionsViewProps {
   activeRunName: string | null;
   runsPayload: RunsPayload | null;
   onSelectRun: (runName: string | null) => void;
+  onSelectView?: (view: ControlCenterView) => void;
   onOpenVerify?: () => void;
   verified?: boolean;
   telemetry?: RealtimeTelemetry;
@@ -167,6 +169,7 @@ export function SessionsView({
   activeRunName,
   runsPayload,
   onSelectRun,
+  onSelectView,
   onOpenVerify,
   verified,
   telemetry,
@@ -460,6 +463,69 @@ export function SessionsView({
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* SESSION ACTIONS BAR (GATE UI-04) */}
+        <div className="mt-4 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-mono text-zinc-400">
+            <span className="text-zinc-500 font-semibold uppercase">SESSION ACTIONS:</span>
+            <span>[{sessionDetails.id}]</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleCopy("session_action_id", sessionDetails.id)}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-zinc-900/80 px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-white/10 transition-colors font-mono"
+            >
+              {copiedField === "session_action_id" ? (
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+              ) : (
+                <Copy className="h-3.5 w-3.5 text-zinc-400" />
+              )}
+              <span>{copiedField === "session_action_id" ? "Copied" : "Copy ID"}</span>
+            </button>
+
+            {onSelectView && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onSelectView("events")}
+                  className="flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1.5 text-xs text-cyan-300 hover:bg-cyan-500/20 transition-colors font-mono"
+                >
+                  <Activity className="h-3.5 w-3.5" />
+                  <span>Open Events</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onSelectView("findings")}
+                  className="flex items-center gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-300 hover:bg-rose-500/20 transition-colors font-mono"
+                >
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  <span>Open Findings</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onSelectView("logs")}
+                  className="flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300 hover:bg-amber-500/20 transition-colors font-mono"
+                >
+                  <Terminal className="h-3.5 w-3.5" />
+                  <span>Open Logs</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onSelectView("agents")}
+                  className="flex items-center gap-1.5 rounded-lg border border-purple-500/20 bg-purple-500/10 px-2.5 py-1.5 text-xs text-purple-300 hover:bg-purple-500/20 transition-colors font-mono"
+                >
+                  <Bot className="h-3.5 w-3.5" />
+                  <span>Open Agents</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

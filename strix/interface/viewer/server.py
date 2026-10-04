@@ -114,12 +114,16 @@ def resolve_run_dir(base_dir: Path, run_param: str | None, default_run_dir: Path
 SESSION_COOKIE_PREFIX = "strix_viewer_session"
 
 
+_CONTROL_COMMANDS = frozenset({"pause", "resume", "stop", "cancel"})
+
+
 class _ViewerState:
     def __init__(
         self,
         run_dir: Path,
         assets_dir: Path,
         steer_handler: Callable[[str, str], bool] | None = None,
+        control_handler: Callable[[str, dict[str, Any]], Any] | None = None,
     ) -> None:
         self.run_dir = run_dir
         self.assets_dir = assets_dir
@@ -130,6 +134,7 @@ class _ViewerState:
         # launcher), which can deliver a message to a running agent. Absent for
         # standalone ``strix view`` / finished runs, so steering is unavailable.
         self.steer_handler = steer_handler
+        self.control_handler = control_handler
         # Unguessable per-process capability. It is minted here, printed/opened
         # for the operator who started the server (see ``authorized_url``), and
         # exchanged for a session cookie only when presented on the initial page
@@ -185,6 +190,8 @@ def _make_handler(state: _ViewerState) -> type[BaseHTTPRequestHandler]:
                     self._handle_feedback()
                 elif path == "/api/agents/steer":
                     self._handle_steer()
+                elif path == "/api/run/control":
+                    self._handle_run_control()
                 else:
                     self._send_json(HTTPStatus.NOT_FOUND, {"error": "unknown endpoint"})
             except BrokenPipeError:
@@ -246,9 +253,18 @@ def _make_handler(state: _ViewerState) -> type[BaseHTTPRequestHandler]:
                 self._send_json(HTTPStatus.OK, payload)
                 return
             if path == "/api/capabilities":
-                # Steering is only possible when the viewer shares a live scan's
-                # coordinator + event loop (the TUI launcher wires a handler).
-                self._send_json(HTTPStatus.OK, {"can_steer": state.steer_handler is not None})
+                # Steering and operational control are possible when the viewer shares
+                # a live scan's coordinator + event loop or a control handler is wired.
+                self._send_json(
+                    HTTPStatus.OK,
+                    {
+                        "can_steer": state.steer_handler is not None,
+                        "can_control": state.control_handler is not None,
+                        "supported_commands": sorted(_CONTROL_COMMANDS)
+                        if state.control_handler is not None
+                        else [],
+                    },
+                )
                 return
             if path == "/api/auth/status":
                 self._handle_auth_status()
@@ -454,6 +470,61 @@ def _make_handler(state: _ViewerState) -> type[BaseHTTPRequestHandler]:
             else:
                 self._send_json(HTTPStatus.OK, {"ok": False, "error": "not_delivered"})
 
+        def _handle_run_control(self) -> None:
+            if not self._has_session():
+                self._send_json(HTTPStatus.FORBIDDEN, {"error": "forbidden"})
+                return
+            body = self._read_body()
+            command = str(body.get("command") or "").strip().lower()
+            if command not in _CONTROL_COMMANDS:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "error": "invalid_command",
+                        "message": (
+                            f"Command '{command}' is not supported. "
+                            f"Supported: {sorted(_CONTROL_COMMANDS)}"
+                        ),
+                    },
+                )
+                return
+            if state.control_handler is None:
+                self._send_json(
+                    HTTPStatus.FORBIDDEN,
+                    {
+                        "error": "control_unavailable",
+                        "message": "Operational control is unavailable in standalone viewer mode",
+                    },
+                )
+                return
+            summary = read_run_summary(state.run_dir)
+            if summary.get("finished", False) and command in ("pause", "stop", "cancel"):
+                self._send_json(
+                    HTTPStatus.CONFLICT,
+                    {
+                        "error": "state_conflict",
+                        "message": f"Cannot execute '{command}' on an already finished run",
+                    },
+                )
+                return
+            try:
+                result = state.control_handler(command, body)
+                self._send_json(
+                    HTTPStatus.OK,
+                    {
+                        "ok": True,
+                        "status": "accepted",
+                        "command": command,
+                        "result": result,
+                    },
+                )
+            except Exception as exc:
+                logger.exception("Run control command failed: %s", command)
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {"error": "control_failed", "message": str(exc)},
+                )
+
         def _send_relay_error(self, exc: auth.RelayError) -> None:
             status_by_code = {
                 "rate_limited": HTTPStatus.TOO_MANY_REQUESTS,
@@ -566,6 +637,7 @@ def serve(
     port: int = 0,
     open_browser: bool = True,
     steer_handler: Callable[[str, str], bool] | None = None,
+    control_handler: Callable[[str, dict[str, Any]], Any] | None = None,
 ) -> tuple[ThreadingHTTPServer, str, str]:
     """Start the viewer server on a background thread; return (server, url, token).
 
@@ -581,7 +653,12 @@ def serve(
     ``None`` (standalone ``strix view``), steering is reported unavailable.
     """
     assets_dir = bundle_dir()
-    state = _ViewerState(run_dir=run_dir, assets_dir=assets_dir, steer_handler=steer_handler)
+    state = _ViewerState(
+        run_dir=run_dir,
+        assets_dir=assets_dir,
+        steer_handler=steer_handler,
+        control_handler=control_handler,
+    )
     handler = _make_handler(state)
 
     try:

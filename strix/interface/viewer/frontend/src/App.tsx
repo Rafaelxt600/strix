@@ -81,6 +81,9 @@ export default function App() {
   // Whether this viewer can steer a live scan (true only inside the in-TUI
   // launcher that shares the running scan's coordinator + event loop).
   const [canSteer, setCanSteer] = useState(false);
+  // Whether this viewer can execute operational run controls (pause, resume, stop, cancel).
+  const [canControl, setCanControl] = useState(false);
+  const [supportedCommands, setSupportedCommands] = useState<string[]>([]);
 
   const {
     run,
@@ -119,9 +122,13 @@ export default function App() {
     void refreshRuns();
     // Capabilities never change over a session, so fetch once on mount.
     fetchCapabilities()
-      .then((caps) => setCanSteer(caps.can_steer))
+      .then((caps) => {
+        setCanSteer(caps.can_steer);
+        setCanControl(caps.can_control ?? false);
+        setSupportedCommands(caps.supported_commands ?? []);
+      })
       .catch(() => {
-        /* absence of steering is the safe default */
+        /* absence of steering and control is the safe default */
       });
   }, [refreshAuth, refreshRuns]);
 
@@ -315,6 +322,7 @@ export default function App() {
                         runsPayload={runs}
                         telemetry={telemetry}
                         onSelectRun={(name: string | null) => selectRun(name || "")}
+                        onSelectView={userSetView}
                       />
                     ) : view === "targets" ? (
                       <TargetsView
@@ -328,6 +336,10 @@ export default function App() {
                       <ScansView
                         run={run}
                         canSteer={canSteer}
+                        canControl={canControl}
+                        supportedCommands={supportedCommands}
+                        triggerSync={triggerSync}
+                        telemetry={telemetry}
                         onSelectView={userSetView}
                       />
                     ) : view === "tools" ? (

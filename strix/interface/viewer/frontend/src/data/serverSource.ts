@@ -213,14 +213,60 @@ export async function fetchRuns(): Promise<RunsPayload> {
 
 export interface Capabilities {
   can_steer: boolean;
+  can_control?: boolean;
+  supported_commands?: string[];
 }
 
 export type SteerResult = { ok: true } | { ok: false; error: string };
 
-/** GET /api/capabilities. can_steer is true only inside a live in-TUI scan. */
+/** GET /api/capabilities. Reports authoritative steering and operational control availability. */
 export async function fetchCapabilities(): Promise<Capabilities> {
   const obj = (await getJson("/api/capabilities")) as Partial<Capabilities>;
-  return { can_steer: obj?.can_steer === true };
+  return {
+    can_steer: obj?.can_steer === true,
+    can_control: obj?.can_control === true,
+    supported_commands: Array.isArray(obj?.supported_commands) ? obj.supported_commands : [],
+  };
+}
+
+export interface RunControlResult {
+  ok: boolean;
+  status: number;
+  command?: string;
+  result?: unknown;
+  error?: string;
+  message?: string;
+}
+
+/**
+ * POST /api/run/control. Sends an operational command (pause, resume, stop, cancel)
+ * to the authoritative backend runner with idempotency and state protection.
+ */
+export async function executeRunControl(
+  command: "pause" | "resume" | "stop" | "cancel",
+  payload: Record<string, unknown> = {}
+): Promise<RunControlResult> {
+  try {
+    const { ok, status, data } = await postJson("/api/run/control", { command, ...payload });
+    if (ok && data.ok === true) {
+      return { ok: true, status, command, result: data.result };
+    }
+    return {
+      ok: false,
+      status,
+      command,
+      error: String(data.error ?? "control_failed"),
+      message: String(data.message ?? "Operational command failed"),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 0,
+      command,
+      error: "network_error",
+      message: err instanceof Error ? err.message : "Network failure",
+    };
+  }
 }
 
 /** POST /api/agents/steer. Sends a steering instruction to a running agent. */
